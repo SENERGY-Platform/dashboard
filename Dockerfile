@@ -1,11 +1,10 @@
-FROM golang
-
-RUN go get -u github.com/golang/dep/cmd/dep
+FROM golang:1.11
 
 COPY . /go/src/dashboard
 WORKDIR /go/src/dashboard
 
-RUN dep ensure
+ENV GO111MODULE=on
+
 RUN go build
 
 EXPOSE 8080
