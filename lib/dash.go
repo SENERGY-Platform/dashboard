@@ -45,6 +45,15 @@ func getDashboard(id string, userId string) (dash Dashboard) {
 
 func getDashboards(userId string) (dashs []Dashboard) {
 	Mongo().Find(bson.M{"userid": userId}).Sort("index").All(&dashs)
+	if len(dashs) == 0 {
+		fmt.Println("User has no dashboards, creating default")
+		dash, err := createDefaultDashboard(userId)
+		if err != nil {
+			fmt.Println("ERROR: could not create default dashboard: ", err.Error())
+		} else {
+			dashs = append(dashs, dash)
+		}
+	}
 	return
 }
 
@@ -154,4 +163,85 @@ func migrateDashboardIndices() (err error) {
 		userIndex++
 	}
 	return nil
+}
+
+func createDefaultDashboard(userId string) (result Dashboard, err error) {
+	result.Id = bson.NewObjectId()
+	uZero := uint16(0)
+	result.Index = &uZero
+	result.UserId = userId
+	result.Name = "System"
+	result.RefreshTime = 0
+	result.Widgets = []Widget{
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Prozesse",
+			Type:       "process_state",
+			Properties: map[string]interface{}{},
+		},
+
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Letzte Prozesse",
+			Type:       "process_model_list",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Prozessausführungen",
+			Type:       "charts_process_instances",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:   bson.NewObjectId(),
+			Name: "Prozessprobleme",
+			Type: "process_incident_list",
+			Properties: map[string]interface{}{
+				"limit": 10,
+			},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Prozessausführungen pro Tag",
+			Type:       "charts_process_deployments",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Gerätestatus",
+			Type:       "devices_state",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Geräte pro Hub",
+			Type:       "charts_device_per_gateway",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Ausfallquote pro Hub (Letzte 7 Tage)",
+			Type:       "charts_device_downtime_rate_per_gateway",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Geräteausfallquote (Heute)",
+			Type:       "charts_device_total_downtime",
+			Properties: map[string]interface{}{},
+		},
+		{
+			Id:         bson.NewObjectId(),
+			Name:       "Geräteausfälle (Letzte 7 Tage)",
+			Type:       "device_downtime_list",
+			Properties: map[string]interface{}{},
+		},
+	}
+
+	err = Mongo().Insert(result)
+	if err != nil {
+		fmt.Println("Error create:", err)
+		return result, err
+	}
+	return result, nil
 }
