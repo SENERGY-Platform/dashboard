@@ -28,22 +28,23 @@ type Response struct {
 }
 
 type Dashboard struct {
-	Id        bson.ObjectId `bson:"_id,omitempty" json:"id"`
-	Name string `json:"name,omitempty"`
-	UserId string `json:"user_id,omitempty"`
-	RefreshTime uint16 `json:"refresh_time"`
-	Widgets [] Widget `json:"widgets,omitempty"`
+	Id          bson.ObjectId `bson:"_id,omitempty" json:"id"`
+	Name        string        `json:"name,omitempty"`
+	UserId      string        `json:"user_id,omitempty"`
+	RefreshTime uint16        `json:"refresh_time"`
+	Widgets     []Widget      `json:"widgets,omitempty"`
+	Index       *uint16       `json:"index,omitempty"`
 }
 
 type Widget struct {
-	Id bson.ObjectId `bson:"_id,omitempty" json:"id"`
-	Name string `json:"name,omitempty"`
-	Type string `json:"type,omitempty"`
-	Properties interface{} `json:"properties,omitempty"`
+	Id         bson.ObjectId `bson:"_id,omitempty" json:"id"`
+	Name       string        `json:"name,omitempty"`
+	Type       string        `json:"type,omitempty"`
+	Properties interface{}   `json:"properties,omitempty"`
 }
 
 func (this *Dashboard) GetWidget(id bson.ObjectId) (result Widget, err error) {
-	for _, element:= range this.Widgets {
+	for _, element := range this.Widgets {
 		if element.Id == id {
 			return element, nil
 		}
@@ -59,7 +60,7 @@ func (this *Dashboard) updateWidget(widget Widget) (err error) {
 	widgets := []Widget{}
 	updated := false
 
-	for _, element:= range this.Widgets {
+	for _, element := range this.Widgets {
 		if element.Id == widget.Id {
 			updated = true
 			widgets = append(widgets, widget)
@@ -96,7 +97,7 @@ func (this *Dashboard) deleteWidget(widgetId string) (err error) {
 	widgets := []Widget{}
 	deleted := false
 
-	for _, element:= range this.Widgets {
+	for _, element := range this.Widgets {
 		if element.Id == bson.ObjectIdHex(widgetId) {
 			deleted = true
 		} else {

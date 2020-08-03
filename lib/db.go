@@ -19,8 +19,8 @@
 package lib
 
 import (
-	"github.com/globalsign/mgo"
 	"fmt"
+	"github.com/globalsign/mgo"
 )
 
 var DB *mgo.Session
@@ -33,13 +33,17 @@ func InitDB() {
 		fmt.Println("Successfully connected to DB!")
 	}
 	DB = session
+	err = migrateDashboardIndices()
+	if err != nil {
+		panic("could not migrate dashboard indices: " + err.Error())
+	}
 }
 
-func Mongo() *mgo.Collection  {
+func Mongo() *mgo.Collection {
 	return DB.DB("dashboard").C("dashboards")
 
 }
 
-func CloseDB()  {
+func CloseDB() {
 	DB.Close()
 }

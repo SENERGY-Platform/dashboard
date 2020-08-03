@@ -21,20 +21,21 @@ package lib
 import (
 	"fmt"
 	"github.com/globalsign/mgo/bson"
+	"strconv"
 )
 
 func createDashboard(dash Dashboard, userId string) (result Dashboard, err error) {
 	dash.Id = bson.NewObjectId()
 	dash.UserId = userId
 	err = Mongo().Insert(dash)
-	if err != nil{
+	if err != nil {
 		fmt.Println("Error create:", err)
 		return result, err
 	}
 	return dash, nil
 }
 
-func getDashboard(id string, userId string) (dash Dashboard){
+func getDashboard(id string, userId string) (dash Dashboard) {
 	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId}).One(&dash)
 	if err != nil {
 		fmt.Println("Error find:", err)
@@ -42,21 +43,33 @@ func getDashboard(id string, userId string) (dash Dashboard){
 	return
 }
 
-func getDashboards(userId string)(dashs [] Dashboard){
-	Mongo().Find(bson.M{"userid": userId}).All(&dashs)
+func getDashboards(userId string) (dashs []Dashboard) {
+	Mongo().Find(bson.M{"userid": userId}).Sort("index").All(&dashs)
 	return
 }
 
-func deleteDashboard(id string, userId string) Response{
-	err := Mongo().Remove(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId})
+func deleteDashboard(id string, userId string) Response {
+	var old Dashboard
+	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId}).One(&old)
 	if err != nil {
 		fmt.Println("Error remove:", err)
 	}
+	err = Mongo().Remove(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId})
+	if err != nil {
+		fmt.Println("Error remove:", err)
+	}
+
+	// update indices
+	info, err := Mongo().UpdateAll(bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
+	if err != nil {
+		fmt.Println("Error remove:", err)
+	}
+	fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(info.Updated) + " other dashboards")
 	return Response{"ok"}
 }
 
-func updateDashboard(dash Dashboard, userId string) Dashboard{
-	for index, widget := range dash.Widgets{
+func updateDashboard(dash Dashboard, userId string) Dashboard {
+	for index, widget := range dash.Widgets {
 		if !widget.Id.Valid() {
 			dash.Widgets[index].Id = bson.NewObjectId()
 		}
@@ -69,8 +82,8 @@ func updateDashboard(dash Dashboard, userId string) Dashboard{
 	return dash
 }
 
-func getWidget(dashboardId string, widgetId string,userId string) (widget Widget){
-	dash:= Dashboard{}
+func getWidget(dashboardId string, widgetId string, userId string) (widget Widget) {
+	dash := Dashboard{}
 	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(dashboardId), "userid": userId}).One(&dash)
 	if err != nil {
 		fmt.Println("Error find:", err)
@@ -83,7 +96,7 @@ func getWidget(dashboardId string, widgetId string,userId string) (widget Widget
 	return
 }
 
-func createWidget(dashboardId string, widget Widget, userId string) (result Widget, err error){
+func createWidget(dashboardId string, widget Widget, userId string) (result Widget, err error) {
 	dash := getDashboard(dashboardId, userId)
 	widgetResult, err := dash.addWidget(widget)
 	if err != nil {
@@ -95,7 +108,7 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 	return widgetResult, nil
 }
 
-func updateWidget(dashboardId string, widget Widget, userId string) (err error){
+func updateWidget(dashboardId string, widget Widget, userId string) (err error) {
 	dash := getDashboard(dashboardId, userId)
 	err = dash.updateWidget(widget)
 	if err != nil {
@@ -107,7 +120,7 @@ func updateWidget(dashboardId string, widget Widget, userId string) (err error){
 	return nil
 }
 
-func deleteWidget(dashboardId string, widgetId string, userId string) (err error){
+func deleteWidget(dashboardId string, widgetId string, userId string) (err error) {
 	dash := getDashboard(dashboardId, userId)
 	err = dash.deleteWidget(widgetId)
 	if err != nil {
@@ -116,5 +129,29 @@ func deleteWidget(dashboardId string, widgetId string, userId string) (err error
 	}
 	updateDashboard(dash, userId)
 
+	return nil
+}
+
+func migrateDashboardIndices() (err error) {
+	fmt.Println("Adding indices to dashboards when needed")
+	var dashs []Dashboard
+	err = Mongo().Find(bson.M{}).Sort("userid").All(&dashs)
+	if err != nil {
+		return
+	}
+	lastUserId := ""
+	userIndex := uint16(0)
+	for _, dash := range dashs {
+		if dash.UserId != lastUserId {
+			userIndex = 0
+		}
+		lastUserId = dash.UserId
+		if dash.Index == nil {
+			dash.Index = &userIndex
+			fmt.Println("Adding index " + strconv.Itoa(int(userIndex)) + " to dashboard " + dash.Id.Hex() + " of user " + dash.UserId)
+			updateDashboard(dash, dash.UserId)
+		}
+		userIndex++
+	}
 	return nil
 }
