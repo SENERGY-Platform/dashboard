@@ -43,8 +43,11 @@ func getDashboard(id string, userId string) (dash Dashboard) {
 	return
 }
 
-func getDashboards(userId string) (dashs []Dashboard) {
-	Mongo().Find(bson.M{"userid": userId}).Sort("index").All(&dashs)
+func getDashboards(userId string) (dashs []Dashboard, err error) {
+	err = Mongo().Find(bson.M{"userid": userId}).Sort("index").All(&dashs)
+	if err != nil {
+		return
+	}
 	if len(dashs) == 0 {
 		fmt.Println("User has no dashboards, creating default")
 		dash, err := createDefaultDashboard(userId)

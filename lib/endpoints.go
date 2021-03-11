@@ -43,12 +43,12 @@ func (e *Endpoint) putDashboardEndpoint(w http.ResponseWriter, req *http.Request
 	var dashReq Dashboard
 	err := decoder.Decode(&dashReq)
 	if err != nil {
-		http.Error(w, "Could not decode Dashboard Request data: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Could not decode Dashboard Request data: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	result, err := createDashboard(dashReq, getUserId(req))
 	if err != nil {
-		http.Error(w, "Error while creating dashboard: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error while creating dashboard: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -64,9 +64,14 @@ func (e *Endpoint) getDashboardEndpoint(w http.ResponseWriter, req *http.Request
 }
 
 func (e *Endpoint) getDashboardsEndpoint(w http.ResponseWriter, req *http.Request) {
+	dashboards, err := getDashboards(getUserId(req))
+	if err != nil {
+		http.Error(w, "Error while reading dashboards: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(getDashboards(getUserId(req)))
+	json.NewEncoder(w).Encode(&dashboards)
 }
 
 func (e *Endpoint) deleteDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
@@ -106,7 +111,7 @@ func (e *Endpoint) postWidgetEndpoint(w http.ResponseWriter, req *http.Request) 
 	vars := mux.Vars(req)
 	err = updateWidget(vars["dashboardId"], widgetReq, getUserId(req))
 	if err != nil {
-		http.Error(w, "Error while updating widget: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -125,7 +130,7 @@ func (e *Endpoint) putWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	result, err := createWidget(vars["dashboardId"], widgetReq, getUserId(req))
 	if err != nil {
-		http.Error(w, "Error while creating widget: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error while creating widget: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -137,7 +142,7 @@ func (e *Endpoint) deleteWidgetEndpoint(w http.ResponseWriter, req *http.Request
 	vars := mux.Vars(req)
 	err := deleteWidget(vars["dashboardId"], vars["widgetId"], getUserId(req))
 	if err != nil {
-		http.Error(w, "Error while updating widget: " + err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
