@@ -71,12 +71,16 @@ func deleteDashboard(id string, userId string) Response {
 		fmt.Println("Error remove:", err)
 	}
 
-	// update indices
-	info, err := Mongo().UpdateAll(bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
-	if err != nil {
-		fmt.Println("Error remove:", err)
+	if old.Index != nil {
+		// update indices
+		info, err := Mongo().UpdateAll(bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
+		if err != nil {
+			fmt.Println("Error remove:", err)
+		}
+		fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(info.Updated) + " other dashboards")
+	} else {
+		fmt.Println("Dashboard had no index, skipping update of other dashboards")
 	}
-	fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(info.Updated) + " other dashboards")
 	return Response{"ok"}
 }
 
