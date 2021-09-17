@@ -27,7 +27,7 @@ import (
 )
 
 func CreateServer() {
-	fmt.Println("Start Server");
+	fmt.Println("Start Server")
 	router := mux.NewRouter()
 	e := NewEndpoint()
 	router.HandleFunc("/", e.getRootEndpoint).Methods("GET")
@@ -47,6 +47,6 @@ func CreateServer() {
 			AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "OPTIONS"},
 		})
 	handler := c.Handler(router)
-	logger := NewLogger(handler, "CALL")
+	logger := NewLogger(handler)
 	log.Fatal(http.ListenAndServe(":8080", logger))
 }
