@@ -1,4 +1,4 @@
-FROM golang:1.11
+FROM golang:1.17
 
 COPY . /go/src/dashboard
 WORKDIR /go/src/dashboard
