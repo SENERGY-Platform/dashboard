@@ -42,3 +42,5 @@ jobs:
           tags: |
             smartenergyplatform/dashboard:latest
             ghcr.io/senergy-platform/dashboard:latest
+            smartenergyplatform/dashboard:prod
+            ghcr.io/senergy-platform/dashboard:prod
