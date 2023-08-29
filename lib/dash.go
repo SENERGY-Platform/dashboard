@@ -167,7 +167,7 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 		fmt.Println("Error createWidget: ", err)
 		return result, err
 	}
-	_, err = updateDashboard(dash, userId)
+	_, err = updateDashboard(dash, dashboardId, userId)
 
 	return widgetResult, err
 }
@@ -182,7 +182,7 @@ func updateWidget(dashboardId string, widget Widget, userId string) (err error) 
 		fmt.Println("Error updateWidget: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, userId)
+	dash, err = updateDashboard(dash, dashboardId, userId)
 
 	return err
 }
@@ -197,7 +197,7 @@ func updateWidgetPositions(dashboardId string, widget []WidgetPosition, userId s
 		fmt.Println("Error updateWidgetPostition: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, userId)
+	dash, err = updateDashboard(dash, dashboardId, userId)
 
 	return err
 }
@@ -212,7 +212,7 @@ func deleteWidget(dashboardId string, widgetId string, userId string) (err error
 		fmt.Println("Error deleteWidget: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, userId)
+	dash, err = updateDashboard(dash, dashboardId, userId)
 
 	return err
 }
@@ -239,7 +239,7 @@ func migrateDashboardIndices() (err error) {
 		if dash.Index == nil {
 			dash.Index = &userIndex
 			fmt.Println("Adding index " + strconv.Itoa(int(userIndex)) + " to dashboard " + dash.Id.Hex() + " of user " + dash.UserId)
-			updateDashboard(dash, dash.UserId)
+			updateDashboard(dash, dash.Id.Hex(), dash.UserId)
 		}
 		userIndex++
 	}
