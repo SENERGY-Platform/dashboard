@@ -95,8 +95,12 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 	}
 
 	vars := mux.Vars(req)
+	dashboardId := vars["id"]
+	userId := getUserId(req)
+	oldDashboard, err := getDashboard(dashboardId, userId)
+	dashReq.Widgets = oldDashboard.Widgets
 
-	dash, err := updateDashboard(dashReq, vars["id"], getUserId(req))
+	dash, err := updateDashboard(dashReq, dashboardId, userId)
 	if err != nil {
 		http.Error(w, "Error while updating dashboard: "+err.Error(), http.StatusInternalServerError)
 		return

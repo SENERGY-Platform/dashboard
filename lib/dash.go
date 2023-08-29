@@ -112,9 +112,6 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) 
 	// does only update dashboard properties, not widgets
 	ctx := context.TODO()
 
-	oldDashboard, err := getDashboard(dashboardId, userId)
-	newDashboard.Widgets = oldDashboard.Widgets
-
 	update := bson.M{
 		"$set": newDashboard,
 	}
