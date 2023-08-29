@@ -21,8 +21,9 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 type Endpoint struct {
@@ -38,7 +39,7 @@ func (e *Endpoint) getRootEndpoint(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(Response{"OK"})
 }
 
-func (e *Endpoint) putDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
+func (e *Endpoint) createDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	var dashReq Dashboard
 	err := decoder.Decode(&dashReq)
@@ -60,7 +61,11 @@ func (e *Endpoint) getDashboardEndpoint(w http.ResponseWriter, req *http.Request
 	vars := mux.Vars(req)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(getDashboard(vars["id"], getUserId(req)))
+	dashboard, err := getDashboard(vars["id"], getUserId(req))
+	if err != nil {
+		w.WriteHeader(404)
+	}
+	json.NewEncoder(w).Encode(dashboard)
 }
 
 func (e *Endpoint) getDashboardsEndpoint(w http.ResponseWriter, req *http.Request) {
@@ -81,26 +86,36 @@ func (e *Endpoint) deleteDashboardEndpoint(w http.ResponseWriter, req *http.Requ
 	json.NewEncoder(w).Encode(deleteDashboard(vars["id"], getUserId(req)))
 }
 
-func (e *Endpoint) postDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
+func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	var dashReq Dashboard
 	err := decoder.Decode(&dashReq)
 	if err != nil {
 		fmt.Println("Could not decode Dashboard Request data." + err.Error())
 	}
+
+	vars := mux.Vars(req)
+
+	dash, err := updateDashboard(dashReq, vars["id"], getUserId(req))
+	if err != nil {
+		http.Error(w, "Error while updating dashboard: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(updateDashboard(dashReq, getUserId(req)))
+	json.NewEncoder(w).Encode(dash)
 }
 
 func (e *Endpoint) getWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(getWidget(vars["dashboardId"], vars["widgetId"], getUserId(req)))
+	widget := getWidget(vars["dashboardId"], vars["widgetId"], getUserId(req))
+	json.NewEncoder(w).Encode(widget)
 }
 
-func (e *Endpoint) postWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
+func (e *Endpoint) editWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	var widgetReq Widget
 	err := decoder.Decode(&widgetReq)
@@ -119,7 +134,26 @@ func (e *Endpoint) postWidgetEndpoint(w http.ResponseWriter, req *http.Request) 
 	json.NewEncoder(w).Encode(Response{"OK"})
 }
 
-func (e *Endpoint) putWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
+func (e *Endpoint) editWidgetPosition(w http.ResponseWriter, req *http.Request) {
+	decoder := json.NewDecoder(req.Body)
+	var widgetReq []WidgetPosition
+	err := decoder.Decode(&widgetReq)
+	if err != nil {
+		fmt.Println("Could not decode Widget Position Request data." + err.Error())
+	}
+
+	vars := mux.Vars(req)
+	err = updateWidgetPositions(vars["dashboardId"], widgetReq, getUserId(req))
+	if err != nil {
+		http.Error(w, "Error while updating widget position: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(Response{"OK"})
+}
+
+func (e *Endpoint) createWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	var widgetReq Widget
 	err := decoder.Decode(&widgetReq)

@@ -19,15 +19,20 @@
 package lib
 
 import (
+	"context"
 	"fmt"
-	"github.com/globalsign/mgo/bson"
 	"strconv"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func createDashboard(dash Dashboard, userId string) (result Dashboard, err error) {
-	dash.Id = bson.NewObjectId()
+	ctx := context.TODO()
+	dash.Id = primitive.NewObjectID()
 	dash.UserId = userId
-	err = Mongo().Insert(dash)
+	_, err = Mongo().InsertOne(ctx, dash)
 	if err != nil {
 		fmt.Println("Error create:", err)
 		return result, err
@@ -35,8 +40,14 @@ func createDashboard(dash Dashboard, userId string) (result Dashboard, err error
 	return dash, nil
 }
 
-func getDashboard(id string, userId string) (dash Dashboard) {
-	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId}).One(&dash)
+func getDashboard(id string, userId string) (dash Dashboard, err error) {
+	ctx := context.TODO()
+	objectId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return
+	}
+
+	err = Mongo().FindOne(ctx, bson.M{"_id": objectId, "userid": userId}).Decode(&dash)
 	if err != nil {
 		fmt.Println("Error find:", err)
 	}
@@ -44,10 +55,16 @@ func getDashboard(id string, userId string) (dash Dashboard) {
 }
 
 func getDashboards(userId string) (dashs []Dashboard, err error) {
-	err = Mongo().Find(bson.M{"userid": userId}).Sort("index").All(&dashs)
+	ctx := context.TODO()
+	opts := options.Find().SetSort(bson.D{{"index", 1}})
+	cur, err := Mongo().Find(ctx, bson.M{"userid": userId}, opts)
 	if err != nil {
-		return
+		return nil, err
 	}
+	if err = cur.All(context.TODO(), &dashs); err != nil {
+		return nil, err
+	}
+
 	if len(dashs) == 0 {
 		fmt.Println("User has no dashboards, creating default")
 		dash, err := createDefaultDashboard(userId)
@@ -62,50 +79,78 @@ func getDashboards(userId string) (dashs []Dashboard, err error) {
 
 func deleteDashboard(id string, userId string) Response {
 	var old Dashboard
-	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId}).One(&old)
+	ctx := context.TODO()
+	objectId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return Response{"ok"}
+	}
+
+	err = Mongo().FindOne(ctx, bson.M{"_id": objectId, "userid": userId}).Decode(&old)
 	if err != nil {
 		fmt.Println("Error remove:", err)
 	}
-	err = Mongo().Remove(bson.M{"_id": bson.ObjectIdHex(id), "userid": userId})
+	_, err = Mongo().DeleteOne(ctx, bson.M{"_id": objectId, "userid": userId})
 	if err != nil {
 		fmt.Println("Error remove:", err)
 	}
 
 	if old.Index != nil {
 		// update indices
-		info, err := Mongo().UpdateAll(bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
+		info, err := Mongo().UpdateMany(ctx,
+			bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
 		if err != nil {
 			fmt.Println("Error remove:", err)
 		}
-		fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(info.Updated) + " other dashboards")
+		fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(int(info.ModifiedCount)) + " other dashboards")
 	} else {
 		fmt.Println("Dashboard had no index, skipping update of other dashboards")
 	}
 	return Response{"ok"}
 }
 
-func updateDashboard(dash Dashboard, userId string) Dashboard {
-	for index, widget := range dash.Widgets {
-		if !widget.Id.Valid() {
-			dash.Widgets[index].Id = bson.NewObjectId()
-		}
+func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) (Dashboard, error) {
+	// does only update dashboard properties, not widgets
+	ctx := context.TODO()
+
+	oldDashboard, err := getDashboard(dashboardId, userId)
+	newDashboard.Widgets = oldDashboard.Widgets
+
+	update := bson.M{
+		"$set": newDashboard,
 	}
 
-	err := Mongo().Update(bson.M{"_id": bson.ObjectId(dash.Id), "userid": userId}, dash)
+	id, err := primitive.ObjectIDFromHex(dashboardId)
+	if err != nil {
+		return Dashboard{}, err
+	}
+
+	_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
 	if err != nil {
 		fmt.Println("Error update:", err)
+		return Dashboard{}, err
 	}
-	return dash
+	return newDashboard, nil
 }
 
 func getWidget(dashboardId string, widgetId string, userId string) (widget Widget) {
 	dash := Dashboard{}
-	err := Mongo().Find(bson.M{"_id": bson.ObjectIdHex(dashboardId), "userid": userId}).One(&dash)
+	ctx := context.TODO()
+	objectID, err := primitive.ObjectIDFromHex(dashboardId)
+	if err != nil {
+		return Widget{}
+	}
+	err = Mongo().FindOne(ctx, bson.M{"_id": objectID, "userid": userId}).Decode(&dash)
 	if err != nil {
 		fmt.Println("Error find:", err)
 		return
 	}
-	widget, err = dash.GetWidget(bson.ObjectIdHex(widgetId))
+
+	id, err := primitive.ObjectIDFromHex(widgetId)
+	if err != nil {
+		fmt.Println("Error get id from hex: ", err)
+	}
+
+	_, widget, err = dash.GetWidget(id)
 	if err != nil {
 		fmt.Println("Error getWidget: ", err)
 	}
@@ -113,47 +158,76 @@ func getWidget(dashboardId string, widgetId string, userId string) (widget Widge
 }
 
 func createWidget(dashboardId string, widget Widget, userId string) (result Widget, err error) {
-	dash := getDashboard(dashboardId, userId)
+	dash, err := getDashboard(dashboardId, userId)
+	if err != nil {
+		return Widget{}, err
+	}
 	widgetResult, err := dash.addWidget(widget)
 	if err != nil {
 		fmt.Println("Error createWidget: ", err)
 		return result, err
 	}
-	updateDashboard(dash, userId)
+	_, err = updateDashboard(dash, userId)
 
-	return widgetResult, nil
+	return widgetResult, err
 }
 
 func updateWidget(dashboardId string, widget Widget, userId string) (err error) {
-	dash := getDashboard(dashboardId, userId)
+	dash, err := getDashboard(dashboardId, userId)
+	if err != nil {
+		return err
+	}
 	err = dash.updateWidget(widget)
 	if err != nil {
 		fmt.Println("Error updateWidget: ", err)
 		return err
 	}
-	updateDashboard(dash, userId)
+	dash, err = updateDashboard(dash, userId)
 
-	return nil
+	return err
+}
+
+func updateWidgetPositions(dashboardId string, widget []WidgetPosition, userId string) (err error) {
+	dash, err := getDashboard(dashboardId, userId)
+	if err != nil {
+		return err
+	}
+	err = dash.updateWidgetPositions(widget)
+	if err != nil {
+		fmt.Println("Error updateWidgetPostition: ", err)
+		return err
+	}
+	dash, err = updateDashboard(dash, userId)
+
+	return err
 }
 
 func deleteWidget(dashboardId string, widgetId string, userId string) (err error) {
-	dash := getDashboard(dashboardId, userId)
+	dash, err := getDashboard(dashboardId, userId)
+	if err != nil {
+		return
+	}
 	err = dash.deleteWidget(widgetId)
 	if err != nil {
 		fmt.Println("Error deleteWidget: ", err)
 		return err
 	}
-	updateDashboard(dash, userId)
+	dash, err = updateDashboard(dash, userId)
 
-	return nil
+	return err
 }
 
 func migrateDashboardIndices() (err error) {
 	fmt.Println("Adding indices to dashboards when needed")
 	var dashs []Dashboard
-	err = Mongo().Find(bson.M{}).Sort("userid").All(&dashs)
+	ctx := context.TODO()
+	opts := options.Find().SetSort(bson.D{{"userid", 1}})
+	cur, err := Mongo().Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return
+	}
+	if err = cur.All(ctx, &dashs); err != nil {
+		return err
 	}
 	lastUserId := ""
 	userIndex := uint16(0)
@@ -173,7 +247,7 @@ func migrateDashboardIndices() (err error) {
 }
 
 func createDefaultDashboard(userId string) (result Dashboard, err error) {
-	result.Id = bson.NewObjectId()
+	result.Id = primitive.NewObjectID()
 	uZero := uint16(0)
 	result.Index = &uZero
 	result.UserId = userId
@@ -181,26 +255,26 @@ func createDefaultDashboard(userId string) (result Dashboard, err error) {
 	result.RefreshTime = 0
 	result.Widgets = []Widget{
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Prozesse",
 			Type:       "process_state",
 			Properties: map[string]interface{}{},
 		},
 
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Letzte Prozesse",
 			Type:       "process_model_list",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Prozessausführungen",
 			Type:       "charts_process_instances",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:   bson.NewObjectId(),
+			Id:   primitive.NewObjectID(),
 			Name: "Prozessprobleme",
 			Type: "process_incident_list",
 			Properties: map[string]interface{}{
@@ -208,44 +282,45 @@ func createDefaultDashboard(userId string) (result Dashboard, err error) {
 			},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Prozessausführungen pro Tag",
 			Type:       "charts_process_deployments",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Gerätestatus",
 			Type:       "devices_state",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Geräte pro Hub",
 			Type:       "charts_device_per_gateway",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Ausfallquote pro Hub (Letzte 7 Tage)",
 			Type:       "charts_device_downtime_rate_per_gateway",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Geräteausfallquote (Heute)",
 			Type:       "charts_device_total_downtime",
 			Properties: map[string]interface{}{},
 		},
 		{
-			Id:         bson.NewObjectId(),
+			Id:         primitive.NewObjectID(),
 			Name:       "Geräteausfälle (Letzte 7 Tage)",
 			Type:       "device_downtime_list",
 			Properties: map[string]interface{}{},
 		},
 	}
 
-	err = Mongo().Insert(result)
+	ctx := context.TODO()
+	_, err = Mongo().InsertOne(ctx, result)
 	if err != nil {
 		fmt.Println("Error create:", err)
 		return result, err

@@ -20,10 +20,11 @@ package lib
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/rs/cors"
 	"log"
 	"net/http"
+
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 )
 
 func CreateServer() {
@@ -31,15 +32,17 @@ func CreateServer() {
 	router := mux.NewRouter()
 	e := NewEndpoint()
 	router.HandleFunc("/", e.getRootEndpoint).Methods("GET")
-	router.HandleFunc("/dashboard", e.putDashboardEndpoint).Methods("PUT")
-	router.HandleFunc("/dashboard/{id}", e.getDashboardEndpoint).Methods("GET")
 	router.HandleFunc("/dashboards", e.getDashboardsEndpoint).Methods("GET")
-	router.HandleFunc("/dashboard/{id}", e.deleteDashboardEndpoint).Methods("DELETE")
-	router.HandleFunc("/dashboard", e.postDashboardEndpoint).Methods("POST")
-	router.HandleFunc("/dashboard/{dashboardId}/widget/{widgetId}", e.getWidgetEndpoint).Methods("GET")
-	router.HandleFunc("/dashboard/{dashboardId}/widget", e.postWidgetEndpoint).Methods("POST")
-	router.HandleFunc("/dashboard/{dashboardId}/widget", e.putWidgetEndpoint).Methods("PUT")
-	router.HandleFunc("/dashboard/{dashboardId}/widget/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")
+	router.HandleFunc("/dashboards", e.createDashboardEndpoint).Methods("POST")
+	router.HandleFunc("/dashboards/{id}", e.getDashboardEndpoint).Methods("GET")
+	router.HandleFunc("/dashboards/{id}", e.deleteDashboardEndpoint).Methods("DELETE")
+	router.HandleFunc("/dashboards/{id}", e.editDashboardEndpoint).Methods("PUT")
+
+	router.HandleFunc("/widgets/positions/{dashboardId}", e.editWidgetPosition).Methods("PATCH")
+	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.getWidgetEndpoint).Methods("GET")
+	router.HandleFunc("/widgets/{dashboardId}", e.createWidgetEndpoint).Methods("POST")
+	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PUT")
+	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")
 	c := cors.New(
 		cors.Options{
 			AllowedHeaders: []string{"Content-Type", "Authorization"},

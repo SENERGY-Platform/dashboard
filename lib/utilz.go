@@ -31,3 +31,12 @@ func getUserId(r *http.Request) (userId string) {
 	strings.Replace(userId, "\"", "", -1)
 	return
 }
+
+func removeAt[T any](list []T, index int) []T {
+	return append(list[:index], list[index+1:]...)
+}
+
+func insertAt[T any](list []T, value T, index int) []T {
+	listWithValue := append([]T{value}, list[index:]...)
+	return append(list[:index], listWithValue...)
+}

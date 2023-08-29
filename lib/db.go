@@ -19,31 +19,41 @@
 package lib
 
 import (
+	"context"
 	"fmt"
-	"github.com/globalsign/mgo"
+	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var DB *mgo.Session
+var DB *mongo.Client
 
 func InitDB() {
-	session, err := mgo.Dial(GetEnv("MONGO", "localhost:27017"))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://"+GetEnv("MONGO", "localhost:27017")))
+
 	if err != nil {
 		panic("database connect failed: " + err.Error())
 	} else {
 		fmt.Println("Successfully connected to DB!")
 	}
-	DB = session
+	DB = client
 	err = migrateDashboardIndices()
 	if err != nil {
 		panic("could not migrate dashboard indices: " + err.Error())
 	}
 }
 
-func Mongo() *mgo.Collection {
-	return DB.DB("dashboard").C("dashboards")
+func Mongo() *mongo.Collection {
+	return DB.Database("dashboard").Collection("dashboards")
 
 }
 
 func CloseDB() {
-	DB.Close()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := DB.Disconnect(ctx); err != nil {
+		panic(err)
+	}
 }

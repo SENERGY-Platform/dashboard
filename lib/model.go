@@ -20,7 +20,8 @@ package lib
 
 import (
 	"errors"
-	"github.com/globalsign/mgo/bson"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Response struct {
@@ -28,35 +29,36 @@ type Response struct {
 }
 
 type Dashboard struct {
-	Id          bson.ObjectId `bson:"_id,omitempty" json:"id"`
-	Name        string        `json:"name,omitempty"`
-	UserId      string        `json:"user_id,omitempty"`
-	RefreshTime uint16        `json:"refresh_time"`
-	Widgets     []Widget      `json:"widgets,omitempty"`
-	Index       *uint16       `json:"index,omitempty"`
+	Id          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Name        string             `json:"name,omitempty"`
+	UserId      string             `json:"user_id,omitempty"`
+	RefreshTime uint16             `json:"refresh_time"`
+	Widgets     []Widget           `json:"widgets,omitempty"`
+	Index       *uint16            `json:"index,omitempty"`
 }
 
 type Widget struct {
-	Id         bson.ObjectId `bson:"_id,omitempty" json:"id"`
-	Name       string        `json:"name,omitempty"`
-	Type       string        `json:"type,omitempty"`
-	Properties interface{}   `json:"properties,omitempty"`
+	Id         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Name       string             `json:"name,omitempty"`
+	Type       string             `json:"type,omitempty"`
+	Properties interface{}        `json:"properties,omitempty"`
 }
 
-func (this *Dashboard) GetWidget(id bson.ObjectId) (result Widget, err error) {
-	for _, element := range this.Widgets {
+type WidgetPosition struct {
+	Id    primitive.ObjectID `json:"id"`
+	Index uint16             `json:"index"`
+}
+
+func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widget, err error) {
+	for index, element := range this.Widgets {
 		if element.Id == id {
-			return element, nil
+			return index, element, nil
 		}
 	}
-	return result, errors.New("No widget with id:" + id.String())
+	return 0, result, errors.New("No widget with id:" + id.String())
 }
 
 func (this *Dashboard) updateWidget(widget Widget) (err error) {
-	if !widget.Id.Valid() {
-		return errors.New("widget id is not valid")
-	}
-
 	widgets := []Widget{}
 	updated := false
 
@@ -77,13 +79,23 @@ func (this *Dashboard) updateWidget(widget Widget) (err error) {
 	return nil
 }
 
-func (this *Dashboard) addWidget(widget Widget) (result Widget, err error) {
+func (this *Dashboard) updateWidgetPositions(widgetPositions []WidgetPosition) (err error) {
+	// TODO range check
+	for _, widgetPositionUpdate := range widgetPositions {
+		oldPosition, widget, err := this.GetWidget(widgetPositionUpdate.Id)
+		if err != nil {
+			return err
+		}
 
-	if widget.Id.Valid() {
-		return result, errors.New("widget id is not empty")
+		this.Widgets = removeAt[Widget](this.Widgets, oldPosition)
+		this.Widgets = insertAt[Widget](this.Widgets, widget, int(widgetPositionUpdate.Index))
 	}
 
-	widget.Id = bson.NewObjectId()
+	return nil
+}
+
+func (this *Dashboard) addWidget(widget Widget) (result Widget, err error) {
+	widget.Id = primitive.NewObjectID()
 	this.Widgets = append(this.Widgets, widget)
 
 	return widget, nil
@@ -98,7 +110,11 @@ func (this *Dashboard) deleteWidget(widgetId string) (err error) {
 	deleted := false
 
 	for _, element := range this.Widgets {
-		if element.Id == bson.ObjectIdHex(widgetId) {
+		id, err := primitive.ObjectIDFromHex(widgetId)
+		if err != nil {
+			return err
+		}
+		if element.Id == id {
 			deleted = true
 		} else {
 			widgets = append(widgets, element)
