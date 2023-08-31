@@ -21,8 +21,11 @@ package lib
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -32,7 +35,12 @@ var DB *mongo.Client
 func InitDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://"+GetEnv("MONGO", "localhost:27017")))
+
+	tM := reflect.TypeOf(bson.M{})
+	reg := bson.NewRegistryBuilder().RegisterTypeMapEntry(bsontype.EmbeddedDocument, tM).Build()
+	clientOpts := options.Client().ApplyURI("mongodb://" + GetEnv("MONGO", "localhost:27017")).SetRegistry(reg)
+
+	client, err := mongo.Connect(ctx, clientOpts)
 
 	if err != nil {
 		panic("database connect failed: " + err.Error())
