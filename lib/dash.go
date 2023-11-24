@@ -20,6 +20,7 @@ package lib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -109,7 +110,6 @@ func deleteDashboard(id string, userId string) Response {
 }
 
 func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) (Dashboard, error) {
-	// does only update dashboard properties, not widgets
 	ctx := context.TODO()
 
 	update := bson.M{
@@ -169,12 +169,16 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 	return widgetResult, err
 }
 
-func updateWidget(dashboardId string, widget Widget, userId string) (err error) {
+func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
+	if propertyToChange == "id" || propertyToChange == "type" {
+		return errors.New("Cant update widget id or type")
+	}
+	
 	dash, err := getDashboard(dashboardId, userId)
 	if err != nil {
 		return err
 	}
-	err = dash.updateWidget(widget)
+	err = dash.updateWidget(value, propertyToChange, widgetID)
 	if err != nil {
 		fmt.Println("Error updateWidget: ", err)
 		return err

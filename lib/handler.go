@@ -41,13 +41,16 @@ func CreateServer() {
 	router.HandleFunc("/widgets/positions/{dashboardId}", e.editWidgetPosition).Methods("PATCH")
 	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.getWidgetEndpoint).Methods("GET")
 	router.HandleFunc("/widgets/{dashboardId}", e.createWidgetEndpoint).Methods("POST")
-	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PUT")
 	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")
+	
+	//router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PUT")
+	router.HandleFunc("/widgets/{property}/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PATCH")
+
 	c := cors.New(
 		cors.Options{
 			AllowedHeaders: []string{"Content-Type", "Authorization"},
 			AllowedOrigins: []string{"*"},
-			AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "OPTIONS"},
+			AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"},
 		})
 	handler := c.Handler(router)
 	logger := NewLogger(handler)

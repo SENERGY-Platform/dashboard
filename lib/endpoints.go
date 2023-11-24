@@ -21,6 +21,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -120,15 +121,16 @@ func (e *Endpoint) getWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 }
 
 func (e *Endpoint) editWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
-	var widgetReq Widget
-	err := decoder.Decode(&widgetReq)
+	payload, err := io.ReadAll(req.Body)
 	if err != nil {
-		fmt.Println("Could not decode Widget Request data." + err.Error())
+		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
+	value := string(payload)
+	
 	vars := mux.Vars(req)
-	err = updateWidget(vars["dashboardId"], widgetReq, getUserId(req))
+	err = updateWidget(vars["dashboardId"], value, vars["property"], vars["widgetId"], getUserId(req))
 	if err != nil {
 		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -163,6 +165,8 @@ func (e *Endpoint) createWidgetEndpoint(w http.ResponseWriter, req *http.Request
 	err := decoder.Decode(&widgetReq)
 	if err != nil {
 		fmt.Println("Could not decode Widget Request data." + err.Error())
+		http.Error(w, "Error while decoding widget data: "+err.Error(), http.StatusInternalServerError)
+		return 
 	}
 
 	vars := mux.Vars(req)

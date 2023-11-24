@@ -22,6 +22,10 @@ import (
 	"errors"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"strings"
+	"log"
+	"reflect"
+	"fmt"
 )
 
 type Response struct {
@@ -58,14 +62,59 @@ func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widge
 	return 0, result, errors.New("No widget with id:" + id.String())
 }
 
-func (this *Dashboard) updateWidget(widget Widget) (err error) {
+
+func UpdateWidgetProperty(widget Widget, propertyToChange string, newValue interface{}) (Widget, error) {
+	propertyPath := strings.Split(propertyToChange, ".")
+	i_last_prop := len(propertyPath) - 1
+	currentValue := widget.Properties
+	
+	for i, property := range propertyPath {
+		val := reflect.ValueOf(currentValue)
+
+		if val.Kind() == reflect.Map {
+			if i == i_last_prop {
+				val.SetMapIndex(reflect.ValueOf(property), reflect.ValueOf(newValue))
+				break
+			}
+
+			temp := val.MapIndex(reflect.ValueOf(property)) // why interface?
+			if !temp.IsValid() {
+				return Widget{}, errors.New(fmt.Sprintf("Property %s not found", property))
+			}
+			currentValue = temp.Interface()
+		} 
+	} 
+
+	return widget, nil
+}
+
+func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange string, widgetId string) (err error) {
+	log.Printf("Update widget property: %s to value: %s", propertyToChange, newValue)
+
 	widgets := []Widget{}
 	updated := false
 
+	widgetObjectId, err := primitive.ObjectIDFromHex(widgetId)
+	if err != nil {
+		return
+	}
+
 	for _, element := range this.Widgets {
-		if element.Id == widget.Id {
+		if element.Id == widgetObjectId {
 			updated = true
-			widgets = append(widgets, widget)
+
+			if propertyToChange == "name" {
+				element.Name = newValue.(string)
+				widgets = append(widgets, element)
+				continue
+			} 
+
+			updatedWidget, err := UpdateWidgetProperty(element, propertyToChange, newValue)
+			if err != nil {
+				return err
+			}
+			widgets = append(widgets, updatedWidget)
+			
 		} else {
 			widgets = append(widgets, element)
 		}
