@@ -63,10 +63,11 @@ func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widge
 }
 
 
-func UpdateWidgetProperty(widget Widget, propertyToChange string, newValue interface{}) (Widget, error) {
+func updateWidgetProperty(widget Widget, propertyToChange string, newValue interface{}) (Widget, error) {
 	propertyPath := strings.Split(propertyToChange, ".")
 	i_last_prop := len(propertyPath) - 1
-	currentValue := widget.Properties
+	var currentValue interface{}
+	currentValue = widget.Properties
 	
 	for i, property := range propertyPath {
 		val := reflect.ValueOf(currentValue)
@@ -109,7 +110,13 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 				continue
 			} 
 
-			updatedWidget, err := UpdateWidgetProperty(element, propertyToChange, newValue)
+			if propertyToChange == "properties" {
+				element.Properties = newValue
+				widgets = append(widgets, element)
+				continue
+			}
+
+			updatedWidget, err := updateWidgetProperty(element, propertyToChange, newValue)
 			if err != nil {
 				return err
 			}

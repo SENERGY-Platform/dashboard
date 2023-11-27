@@ -20,7 +20,6 @@ package lib
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -169,11 +168,7 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 	return widgetResult, err
 }
 
-func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
-	if propertyToChange == "id" || propertyToChange == "type" {
-		return errors.New("Cant update widget id or type")
-	}
-	
+func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {	
 	dash, err := getDashboard(dashboardId, userId)
 	if err != nil {
 		return err

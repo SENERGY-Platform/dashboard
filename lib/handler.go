@@ -43,8 +43,9 @@ func CreateServer() {
 	router.HandleFunc("/widgets/{dashboardId}", e.createWidgetEndpoint).Methods("POST")
 	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")
 	
-	//router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PUT")
-	router.HandleFunc("/widgets/{property}/{dashboardId}/{widgetId}", e.editWidgetEndpoint).Methods("PATCH")
+	router.HandleFunc("/widgets/name/{dashboardId}/{widgetId}", e.editWidgetNameEndpoint).Methods("PATCH")
+	router.HandleFunc("/widgets/properties/{dashboardId}/{widgetId}", e.editWidgetPropertyEndpoint).Methods("PATCH")
+	router.HandleFunc("/widgets/properties/{property}/{dashboardId}/{widgetId}", e.editWidgetPropertyEndpoint).Methods("PATCH")
 
 	c := cors.New(
 		cors.Options{

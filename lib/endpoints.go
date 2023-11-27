@@ -120,19 +120,42 @@ func (e *Endpoint) getWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(widget)
 }
 
-func (e *Endpoint) editWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
+func (e *Endpoint) editWidgetPropertyEndpoint(w http.ResponseWriter, req *http.Request) {
 	payload, err := io.ReadAll(req.Body)
 	if err != nil {
 		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	value := string(payload)
+	var newValue interface{} 
+	err = json.Unmarshal(payload, &newValue)
+	if err != nil {
+		newValue = string(payload)
+	}
 	
 	vars := mux.Vars(req)
-	err = updateWidget(vars["dashboardId"], value, vars["property"], vars["widgetId"], getUserId(req))
+	err = updateWidget(vars["dashboardId"], newValue, vars["property"], vars["widgetId"], getUserId(req))
 	if err != nil {
 		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(Response{"OK"})
+}
+
+func (e *Endpoint) editWidgetNameEndpoint(w http.ResponseWriter, req *http.Request) {
+	payload, err := io.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	newValue := string(payload)
+	vars := mux.Vars(req)
+	err = updateWidget(vars["dashboardId"], newValue, "name", vars["widgetId"], getUserId(req))
+	if err != nil {
+		http.Error(w, "Error while updating widget name: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

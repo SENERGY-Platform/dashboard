@@ -22,7 +22,7 @@ func main() {
 		panic(err)
 	}
 
-	propertyToChange := "a.d.c"
+	propertyToChange := "a.b.c"
 	propertyPath := strings.Split(propertyToChange, ".")
 	i_last_prop := len(propertyPath) - 1
 	newValue := 66 
