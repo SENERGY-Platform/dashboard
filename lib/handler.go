@@ -45,7 +45,7 @@ func CreateServer() {
 	
 	router.HandleFunc("/widgets/name/{dashboardId}/{widgetId}", e.editWidgetNameEndpoint).Methods("PATCH")
 	router.HandleFunc("/widgets/properties/{dashboardId}/{widgetId}", e.editWidgetPropertyEndpoint).Methods("PATCH")
-	router.HandleFunc("/widgets/properties/{property}/{dashboardId}/{widgetId}", e.editWidgetPropertyEndpoint).Methods("PATCH")
+	router.HandleFunc("/widgets/properties/{property}/{dashboardId}/{widgetId}", e.editSingleWidgetPropertyEndpoint).Methods("PATCH")
 
 	c := cors.New(
 		cors.Options{
