@@ -32,7 +32,7 @@ func InitSyncDBs() {
 	 }
 	 StandaloneDB = client
 	 fmt.Println("Try to connect to " + os.Getenv("MONGO_REPL_URL"))
-	 clientOpts = options.Client().ApplyURI("mongodb://" + os.Getenv("MONGO_REPL_URL")).SetRegistry(reg)
+	 clientOpts = options.Client().ApplyURI(os.Getenv("MONGO_REPL_URL")).SetRegistry(reg)
  
 	 client, err = mongo.Connect(ctx, clientOpts)
  

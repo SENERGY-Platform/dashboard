@@ -38,7 +38,7 @@ func InitDB() {
 
 	tM := reflect.TypeOf(bson.M{})
 	reg := bson.NewRegistryBuilder().RegisterTypeMapEntry(bsontype.EmbeddedDocument, tM).Build()
-	clientOpts := options.Client().ApplyURI("mongodb://" + GetEnv("MONGO", "localhost:27017")).SetRegistry(reg)
+	clientOpts := options.Client().ApplyURI(GetEnv("MONGO_REPL_URL", "mongodb://localhost:27017")).SetRegistry(reg)
 
 	client, err := mongo.Connect(ctx, clientOpts)
 
