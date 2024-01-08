@@ -173,8 +173,10 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {	
 	ctx := context.TODO()
 
-	wc := writeconcern.Majority()
-	txnOptions := options.Transaction().SetWriteConcern(wc)
+	wc := writeconcern.WriteConcern{
+		W: 2,
+	}
+	txnOptions := options.Transaction().SetWriteConcern(&wc)
 	// Starts a session on the client
 	session, err := DB.StartSession()
 	if err != nil {
@@ -183,7 +185,7 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 	// Defers ending the session after the transaction is committed or ended
 	defer session.EndSession(ctx)
 
-	_, err = session.WithTransaction(context.TODO(), func(ctx mongo.SessionContext) (interface{}, error) {
+	_, err = session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
 		dash, err := getDashboard(dashboardId, userId, ctx)
 		if err != nil {
 			return nil, err
