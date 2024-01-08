@@ -26,6 +26,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+
 )
 
 func createDashboard(dash Dashboard, userId string) (result Dashboard, err error) {
@@ -111,6 +114,16 @@ func deleteDashboard(id string, userId string) Response {
 func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) (Dashboard, error) {
 	ctx := context.TODO()
 
+	wc := writeconcern.Majority()
+	txnOptions := options.Transaction().SetWriteConcern(wc)
+	// Starts a session on the client
+	session, err := DB.StartSession()
+	if err != nil {
+		panic(err)
+	}
+	// Defers ending the session after the transaction is committed or ended
+	defer session.EndSession(ctx)
+
 	update := bson.M{
 		"$set": newDashboard,
 	}
@@ -120,7 +133,11 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) 
 		return Dashboard{}, err
 	}
 
-	_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
+	_, err = session.WithTransaction(context.TODO(), func(ctx mongo.SessionContext) (interface{}, error) {
+		_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
+		return nil, err
+	}, txnOptions)
+
 	if err != nil {
 		fmt.Println("Error update:", err)
 		return Dashboard{}, err

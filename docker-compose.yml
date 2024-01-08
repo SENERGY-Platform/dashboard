@@ -1,7 +1,25 @@
-version: "2"
+version: "3.4"
 
 services:
-  db:
+  standalonedb:
     image: mongo
     ports:
      - "27017:27017"
+
+  # Dashboard Service needs a ReplicaSet Mongo to support transactions
+  replicaset:
+    image: mongo
+    hostname: mongo-0
+    environment:
+      MONGO_REPLICA_SET_NAME: primary
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongosh --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+    command: ["--replSet", "primary", "--bind_ip_all"]
+
+# The dashboard service will connect to localhost:27017
+# but it will then query for the URLs to all replica-set members -> which will be mongo-0:27017
+# Modify /etc/hosts to proxy 127.0.0.1 mongo-0

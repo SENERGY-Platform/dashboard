@@ -20,6 +20,8 @@ package main
 
 import (
 	"log"
+	"os"
+
 	"github.com/SENERGY-Platform/dashboard/lib"
 	"github.com/joho/godotenv"
 )
@@ -28,6 +30,10 @@ func main()  {
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("Error loading .env file")
+	}
+
+	if os.Getenv("SYNC") == "true" {
+		lib.Sync()
 	}
 
 	lib.InitDB()
