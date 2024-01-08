@@ -63,7 +63,8 @@ func (e *Endpoint) getDashboardEndpoint(w http.ResponseWriter, req *http.Request
 	vars := mux.Vars(req)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	dashboard, err := getDashboard(vars["id"], getUserId(req))
+	ctx := context.TODO()
+	dashboard, err := getDashboard(vars["id"], getUserId(req), ctx)
 	if err != nil {
 		w.WriteHeader(404)
 	}
@@ -99,10 +100,11 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	dashboardId := vars["id"]
 	userId := getUserId(req)
-	oldDashboard, err := getDashboard(dashboardId, userId)
+	ctx := context.TODO()
+	oldDashboard, err := getDashboard(dashboardId, userId, ctx)
 	dashReq.Widgets = oldDashboard.Widgets
 
-	dash, err := updateDashboard(dashReq, dashboardId, userId, context.TODO())
+	dash, err := updateDashboard(dashReq, dashboardId, userId, ctx)
 	if err != nil {
 		http.Error(w, "Error while updating dashboard: "+err.Error(), http.StatusInternalServerError)
 		return

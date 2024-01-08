@@ -43,8 +43,7 @@ func createDashboard(dash Dashboard, userId string) (result Dashboard, err error
 	return dash, nil
 }
 
-func getDashboard(id string, userId string) (dash Dashboard, err error) {
-	ctx := context.TODO()
+func getDashboard(id string, userId string, ctx context.Context) (dash Dashboard, err error) {
 	objectId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return
@@ -156,7 +155,8 @@ func getWidget(dashboardId string, widgetId string, userId string) (widget Widge
 }
 
 func createWidget(dashboardId string, widget Widget, userId string) (result Widget, err error) {
-	dash, err := getDashboard(dashboardId, userId)
+	ctx := context.TODO()
+	dash, err := getDashboard(dashboardId, userId, ctx)
 	if err != nil {
 		return Widget{}, err
 	}
@@ -165,7 +165,7 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 		fmt.Println("Error createWidget: ", err)
 		return result, err
 	}
-	_, err = updateDashboard(dash, dashboardId, userId, context.TODO())
+	_, err = updateDashboard(dash, dashboardId, userId, ctx)
 
 	return widgetResult, err
 }
@@ -184,7 +184,7 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 	defer session.EndSession(ctx)
 
 	_, err = session.WithTransaction(context.TODO(), func(ctx mongo.SessionContext) (interface{}, error) {
-		dash, err := getDashboard(dashboardId, userId)
+		dash, err := getDashboard(dashboardId, userId, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -202,7 +202,8 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 }
 
 func updateWidgetPositions(dashboardId string, widget []WidgetPosition, userId string) (err error) {
-	dash, err := getDashboard(dashboardId, userId)
+	ctx := context.TODO()
+	dash, err := getDashboard(dashboardId, userId, ctx)
 	if err != nil {
 		return err
 	}
@@ -211,13 +212,14 @@ func updateWidgetPositions(dashboardId string, widget []WidgetPosition, userId s
 		fmt.Println("Error updateWidgetPostition: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, dashboardId, userId, context.TODO())
+	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 
 	return err
 }
 
 func deleteWidget(dashboardId string, widgetId string, userId string) (err error) {
-	dash, err := getDashboard(dashboardId, userId)
+	ctx := context.TODO()
+	dash, err := getDashboard(dashboardId, userId, ctx)
 	if err != nil {
 		return
 	}
@@ -226,7 +228,7 @@ func deleteWidget(dashboardId string, widgetId string, userId string) (err error
 		fmt.Println("Error deleteWidget: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, dashboardId, userId, context.TODO())
+	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 
 	return err
 }
