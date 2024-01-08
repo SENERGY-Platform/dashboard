@@ -19,6 +19,7 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -101,7 +102,7 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 	oldDashboard, err := getDashboard(dashboardId, userId)
 	dashReq.Widgets = oldDashboard.Widgets
 
-	dash, err := updateDashboard(dashReq, dashboardId, userId)
+	dash, err := updateDashboard(dashReq, dashboardId, userId, context.TODO())
 	if err != nil {
 		http.Error(w, "Error while updating dashboard: "+err.Error(), http.StatusInternalServerError)
 		return

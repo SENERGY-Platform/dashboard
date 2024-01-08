@@ -111,19 +111,7 @@ func deleteDashboard(id string, userId string) Response {
 	return Response{"ok"}
 }
 
-func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) (Dashboard, error) {
-	ctx := context.TODO()
-
-	wc := writeconcern.Majority()
-	txnOptions := options.Transaction().SetWriteConcern(wc)
-	// Starts a session on the client
-	session, err := DB.StartSession()
-	if err != nil {
-		panic(err)
-	}
-	// Defers ending the session after the transaction is committed or ended
-	defer session.EndSession(ctx)
-
+func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, ctx context.Context) (Dashboard, error) {
 	update := bson.M{
 		"$set": newDashboard,
 	}
@@ -133,10 +121,7 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string) 
 		return Dashboard{}, err
 	}
 
-	_, err = session.WithTransaction(context.TODO(), func(ctx mongo.SessionContext) (interface{}, error) {
-		_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
-		return nil, err
-	}, txnOptions)
+	_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
 
 	if err != nil {
 		fmt.Println("Error update:", err)
@@ -180,23 +165,39 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 		fmt.Println("Error createWidget: ", err)
 		return result, err
 	}
-	_, err = updateDashboard(dash, dashboardId, userId)
+	_, err = updateDashboard(dash, dashboardId, userId, context.TODO())
 
 	return widgetResult, err
 }
 
 func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {	
-	dash, err := getDashboard(dashboardId, userId)
-	if err != nil {
-		return err
-	}
-	err = dash.updateWidget(value, propertyToChange, widgetID)
-	if err != nil {
-		fmt.Println("Error updateWidget: ", err)
-		return err
-	}
-	dash, err = updateDashboard(dash, dashboardId, userId)
+	ctx := context.TODO()
 
+	wc := writeconcern.Majority()
+	txnOptions := options.Transaction().SetWriteConcern(wc)
+	// Starts a session on the client
+	session, err := DB.StartSession()
+	if err != nil {
+		panic(err)
+	}
+	// Defers ending the session after the transaction is committed or ended
+	defer session.EndSession(ctx)
+
+	_, err = session.WithTransaction(context.TODO(), func(ctx mongo.SessionContext) (interface{}, error) {
+		dash, err := getDashboard(dashboardId, userId)
+		if err != nil {
+			return nil, err
+		}
+		err = dash.updateWidget(value, propertyToChange, widgetID)
+		if err != nil {
+			fmt.Println("Error updateWidget: ", err)
+			return nil, err
+		}
+		dash, err = updateDashboard(dash, dashboardId, userId, ctx)
+
+		return nil, err
+	}, txnOptions)
+	
 	return err
 }
 
@@ -210,7 +211,7 @@ func updateWidgetPositions(dashboardId string, widget []WidgetPosition, userId s
 		fmt.Println("Error updateWidgetPostition: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, dashboardId, userId)
+	dash, err = updateDashboard(dash, dashboardId, userId, context.TODO())
 
 	return err
 }
@@ -225,7 +226,7 @@ func deleteWidget(dashboardId string, widgetId string, userId string) (err error
 		fmt.Println("Error deleteWidget: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, dashboardId, userId)
+	dash, err = updateDashboard(dash, dashboardId, userId, context.TODO())
 
 	return err
 }
@@ -252,7 +253,7 @@ func migrateDashboardIndices() (err error) {
 		if dash.Index == nil {
 			dash.Index = &userIndex
 			fmt.Println("Adding index " + strconv.Itoa(int(userIndex)) + " to dashboard " + dash.Id.Hex() + " of user " + dash.UserId)
-			updateDashboard(dash, dash.Id.Hex(), dash.UserId)
+			updateDashboard(dash, dash.Id.Hex(), dash.UserId, context.TODO())
 		}
 		userIndex++
 	}
