@@ -50,7 +50,9 @@ type Widget struct {
 
 type WidgetPosition struct {
 	Id    primitive.ObjectID `json:"id"`
-	Index uint16             `json:"index"`
+	Index *int             `json:"index"`
+	DashboardOrigin string `json:"dashboardOrigin"`
+	DashboardDestination string `json:"dashboardDestination"`
 }
 
 func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widget, err error) {
@@ -135,18 +137,45 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 	return nil
 }
 
-func (this *Dashboard) updateWidgetPositions(widgetPositions []WidgetPosition) (err error) {
-	// TODO range check
-	for _, widgetPositionUpdate := range widgetPositions {
-		oldPosition, widget, err := this.GetWidget(widgetPositionUpdate.Id)
-		if err != nil {
-			return err
-		}
-
-		this.Widgets = removeAt[Widget](this.Widgets, oldPosition)
-		this.Widgets = insertAt[Widget](this.Widgets, widget, int(widgetPositionUpdate.Index))
+func (this *Dashboard) SwapWidgetPosition(widgetPosition WidgetPosition) (err error) {
+	oldPosition, widget, err := this.GetWidget(widgetPosition.Id)
+	if err != nil {
+		return err
+	}
+	err = this.removeWidgetAt(oldPosition)
+	if err != nil {
+		return err
 	}
 
+	if widgetPosition.Index != nil {
+		err = this.insertWidgetAt(*widgetPosition.Index, widget)
+	} else {
+		err = this.insertWidgetAt(len(this.Widgets), widget)
+	}
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (this *Dashboard) NewIndexIsValid(index int) bool {
+	return index > len(this.Widgets) || index < 0 // widget can also be appened -> index > len()
+}
+
+func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
+	if this.NewIndexIsValid(index) { 
+		return errors.New("Index out of bounds")
+	}
+	this.Widgets = insertAt[Widget](this.Widgets, widget, index)
+	return nil 
+}
+
+func (this *Dashboard) removeWidgetAt(index int) (err error) {
+	if index > len(this.Widgets) - 1 || index < 0 {
+		return errors.New("Index out of bounds")
+	}
+	this.Widgets = removeAt[Widget](this.Widgets, index)
 	return nil
 }
 

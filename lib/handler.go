@@ -38,7 +38,7 @@ func CreateServer() {
 	router.HandleFunc("/dashboards/{id}", e.deleteDashboardEndpoint).Methods("DELETE")
 	router.HandleFunc("/dashboards/{id}", e.editDashboardEndpoint).Methods("PUT")
 
-	router.HandleFunc("/widgets/positions/{dashboardId}", e.editWidgetPosition).Methods("PATCH")
+	router.HandleFunc("/widgets/positions", e.editWidgetPosition).Methods("PATCH")
 	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.getWidgetEndpoint).Methods("GET")
 	router.HandleFunc("/widgets/{dashboardId}", e.createWidgetEndpoint).Methods("POST")
 	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")

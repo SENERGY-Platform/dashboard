@@ -95,6 +95,8 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 	err := decoder.Decode(&dashReq)
 	if err != nil {
 		fmt.Println("Could not decode Dashboard Request data." + err.Error())
+		http.Error(w, "Error while decoding dashboard: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	vars := mux.Vars(req)
@@ -198,8 +200,7 @@ func (e *Endpoint) editWidgetPosition(w http.ResponseWriter, req *http.Request) 
 		fmt.Println("Could not decode Widget Position Request data." + err.Error())
 	}
 
-	vars := mux.Vars(req)
-	err = updateWidgetPositions(vars["dashboardId"], widgetReq, getUserId(req))
+	err = updateWidgetPositions(widgetReq, getUserId(req))
 	if err != nil {
 		http.Error(w, "Error while updating widget position: "+err.Error(), http.StatusInternalServerError)
 		return
