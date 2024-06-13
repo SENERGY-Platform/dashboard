@@ -211,7 +211,7 @@ func swapWidgetInsideDashboard(positionUpdate WidgetPosition, userId string, ctx
 		return err
 	}
 
-	if positionUpdate.Index != nil && !dash.NewIndexIsValid(*positionUpdate.Index) {
+	if positionUpdate.Index != nil && dash.NewIndexIsInValid(*positionUpdate.Index) {
 		return errors.New("New index is out of bound")
 	}
 

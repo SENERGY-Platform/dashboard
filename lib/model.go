@@ -159,12 +159,12 @@ func (this *Dashboard) SwapWidgetPosition(widgetPosition WidgetPosition) (err er
 	return nil
 }
 
-func (this *Dashboard) NewIndexIsValid(index int) bool {
-	return index > len(this.Widgets) || index < 0 // widget can also be appened -> index > len()
+func (this *Dashboard) NewIndexIsInValid(index int) bool {
+	return index > len(this.Widgets)-1 || index < 0 // widget can also be appened -> index > len()
 }
 
 func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
-	if this.NewIndexIsValid(index) { 
+	if this.NewIndexIsInValid(index) { 
 		return errors.New("Index out of bounds")
 	}
 	this.Widgets = insertAt[Widget](this.Widgets, widget, index)
@@ -172,7 +172,7 @@ func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
 }
 
 func (this *Dashboard) removeWidgetAt(index int) (err error) {
-	if index > len(this.Widgets) - 1 || index < 0 {
+	if this.NewIndexIsInValid(index) {
 		return errors.New("Index out of bounds")
 	}
 	this.Widgets = removeAt[Widget](this.Widgets, index)
