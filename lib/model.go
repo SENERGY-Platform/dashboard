@@ -165,7 +165,7 @@ func (this *Dashboard) NewIndexIsInValid(index int) bool {
 
 func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
 	if this.NewIndexIsInValid(index) { 
-		return errors.New("Index out of bounds")
+		return errors.New(fmt.Sprintf("Insert Index %d out of bounds", index))
 	}
 	this.Widgets = insertAt[Widget](this.Widgets, widget, index)
 	return nil 
@@ -173,7 +173,7 @@ func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
 
 func (this *Dashboard) removeWidgetAt(index int) (err error) {
 	if this.NewIndexIsInValid(index) {
-		return errors.New("Index out of bounds")
+		return errors.New(fmt.Sprintf("Removal Index %d out of bounds", index))
 	}
 	this.Widgets = removeAt[Widget](this.Widgets, index)
 	return nil
