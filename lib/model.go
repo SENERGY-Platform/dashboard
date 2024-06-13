@@ -160,7 +160,7 @@ func (this *Dashboard) SwapWidgetPosition(widgetPosition WidgetPosition) (err er
 }
 
 func (this *Dashboard) NewIndexIsInValid(index int) bool {
-	return index > len(this.Widgets)-1 || index < 0 // widget can also be appened -> index > len()
+	return index > len(this.Widgets) || index < 0 // widget can also be appened -> index > len()
 }
 
 func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
