@@ -20,22 +20,23 @@ package lib
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"strconv"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
-
 )
 
 func createDashboard(dash Dashboard, userId string) (result Dashboard, err error) {
 	ctx := context.TODO()
 	dash.Id = primitive.NewObjectID()
 	dash.UserId = userId
+	dash.UpdatedAt = time.Now()
 	_, err = Mongo().InsertOne(ctx, dash)
 	if err != nil {
 		fmt.Println("Error create:", err)
@@ -44,7 +45,7 @@ func createDashboard(dash Dashboard, userId string) (result Dashboard, err error
 	return dash, nil
 }
 
-func getDashboard(id string, userId string, ctx context.Context) (dash Dashboard, err error) {
+func getDashboard(ifNotModifiedSince *time.Time, id string, userId string, ctx context.Context) (modified bool, dash Dashboard, err error) {
 	objectId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return
@@ -54,18 +55,22 @@ func getDashboard(id string, userId string, ctx context.Context) (dash Dashboard
 	if err != nil {
 		fmt.Println("Error find:", err)
 	}
+	modified = true
+	if ifNotModifiedSince != nil {
+		modified = dash.UpdatedAt.Truncate(time.Second).After(*ifNotModifiedSince)
+	}
 	return
 }
 
-func getDashboards(userId string) (dashs []Dashboard, err error) {
+func getDashboards(ifNotModifiedSince *time.Time, userId string) (modified bool, dashs []Dashboard, err error) {
 	ctx := context.TODO()
 	opts := options.Find().SetSort(bson.D{{"index", 1}})
 	cur, err := Mongo().Find(ctx, bson.M{"userid": userId}, opts)
 	if err != nil {
-		return nil, err
+		return false, nil, err
 	}
 	if err = cur.All(context.TODO(), &dashs); err != nil {
-		return nil, err
+		return false, nil, err
 	}
 
 	if len(dashs) == 0 {
@@ -75,6 +80,15 @@ func getDashboards(userId string) (dashs []Dashboard, err error) {
 			fmt.Println("ERROR: could not create default dashboard: ", err.Error())
 		} else {
 			dashs = append(dashs, dash)
+		}
+	}
+	modified = true
+	if ifNotModifiedSince != nil {
+		for _, dash := range dashs {
+			modified = dash.UpdatedAt.Truncate(time.Second).After(*ifNotModifiedSince)
+			if modified {
+				break
+			}
 		}
 	}
 	return
@@ -112,6 +126,7 @@ func deleteDashboard(id string, userId string) Response {
 }
 
 func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, ctx context.Context) (Dashboard, error) {
+	newDashboard.UpdatedAt = time.Now()
 	update := bson.M{
 		"$set": newDashboard,
 	}
@@ -130,12 +145,12 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, 
 	return newDashboard, nil
 }
 
-func getWidget(dashboardId string, widgetId string, userId string) (widget Widget) {
+func getWidget(ifNotModifiedSince *time.Time, dashboardId string, widgetId string, userId string) (modified bool, lastModified *time.Time, widget Widget) {
 	dash := Dashboard{}
 	ctx := context.TODO()
 	objectID, err := primitive.ObjectIDFromHex(dashboardId)
 	if err != nil {
-		return Widget{}
+		return false, nil, Widget{}
 	}
 	err = Mongo().FindOne(ctx, bson.M{"_id": objectID, "userid": userId}).Decode(&dash)
 	if err != nil {
@@ -152,12 +167,17 @@ func getWidget(dashboardId string, widgetId string, userId string) (widget Widge
 	if err != nil {
 		fmt.Println("Error getWidget: ", err)
 	}
+	modified = true
+	if ifNotModifiedSince != nil {
+		modified = dash.UpdatedAt.Truncate(time.Second).After(*ifNotModifiedSince)
+	}
+	lastModified = &dash.UpdatedAt
 	return
 }
 
 func createWidget(dashboardId string, widget Widget, userId string) (result Widget, err error) {
 	ctx := context.TODO()
-	dash, err := getDashboard(dashboardId, userId, ctx)
+	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 	if err != nil {
 		return Widget{}, err
 	}
@@ -171,7 +191,7 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 	return widgetResult, err
 }
 
-func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {	
+func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
 	ctx := context.TODO()
 
 	wc := writeconcern.WriteConcern{
@@ -187,7 +207,7 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 	defer session.EndSession(ctx)
 
 	_, err = session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
-		dash, err := getDashboard(dashboardId, userId, ctx)
+		_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -200,13 +220,13 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 
 		return nil, err
 	}, txnOptions)
-	
+
 	return err
 }
 
 func swapWidgetInsideDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
 	dashboardId := positionUpdate.DashboardOrigin
-	dash, err := getDashboard(dashboardId, userId, ctx)
+	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 	if err != nil {
 		return err
 	}
@@ -220,20 +240,20 @@ func swapWidgetInsideDashboard(positionUpdate WidgetPosition, userId string, ctx
 		fmt.Println("Error Could not swap widget positions: ", err)
 		return err
 	}
-	dash, err = updateDashboard(dash, dashboardId, userId, ctx)		
+	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 	if err != nil {
 		fmt.Println("Error Could not update dashboard after swapping positions: ", err)
 		return err
 	}
-	return nil 
+	return nil
 }
 
 func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
-	oldDash, err := getDashboard(positionUpdate.DashboardOrigin, userId, ctx)
+	_, oldDash, err := getDashboard(nil, positionUpdate.DashboardOrigin, userId, ctx)
 	if err != nil {
 		return err
 	}
-	newDash, err := getDashboard(positionUpdate.DashboardDestination, userId, ctx)
+	_, newDash, err := getDashboard(nil, positionUpdate.DashboardDestination, userId, ctx)
 	if err != nil {
 		return err
 	}
@@ -247,7 +267,7 @@ func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ct
 	if err != nil {
 		return err
 	}
-	_, err = updateDashboard(oldDash, positionUpdate.DashboardOrigin, userId, ctx)		
+	_, err = updateDashboard(oldDash, positionUpdate.DashboardOrigin, userId, ctx)
 	if err != nil {
 		fmt.Println("Error Could not update dashboard ", err)
 		return err
@@ -258,7 +278,7 @@ func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ct
 		return err
 	}
 
-	_, err = updateDashboard(newDash, positionUpdate.DashboardDestination, userId, ctx)		
+	_, err = updateDashboard(newDash, positionUpdate.DashboardDestination, userId, ctx)
 	if err != nil {
 		fmt.Println("Error Could not update dashboard", err)
 		return err
@@ -269,7 +289,7 @@ func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ct
 
 func updateWidgetPositions(positionUpdates []WidgetPosition, userId string) (err error) {
 	ctx := context.TODO()
-	for _, positionUpdate := range(positionUpdates) {
+	for _, positionUpdate := range positionUpdates {
 		if positionUpdate.DashboardOrigin == positionUpdate.DashboardDestination {
 			return swapWidgetInsideDashboard(positionUpdate, userId, ctx)
 		}
@@ -281,7 +301,7 @@ func updateWidgetPositions(positionUpdates []WidgetPosition, userId string) (err
 
 func deleteWidget(dashboardId string, widgetId string, userId string) (err error) {
 	ctx := context.TODO()
-	dash, err := getDashboard(dashboardId, userId, ctx)
+	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 	if err != nil {
 		return
 	}
@@ -322,6 +342,13 @@ func migrateDashboardIndices() (err error) {
 		userIndex++
 	}
 	return nil
+}
+
+func migrateUpdatedAt() (err error) {
+	fmt.Println("Adding updatedAt to dashboards when needed")
+	ctx := context.TODO()
+	_, err = Mongo().UpdateMany(ctx, bson.M{"updatedAt": bson.M{"$exists": false}}, bson.M{"$currentDate": bson.M{"updatedAt": bson.M{"$type": "timestamp"}}})
+	return err
 }
 
 func createDefaultDashboard(userId string) (result Dashboard, err error) {

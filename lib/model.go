@@ -20,12 +20,14 @@ package lib
 
 import (
 	"errors"
+	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"strings"
+	"fmt"
 	"log"
 	"reflect"
-	"fmt"
+	"strings"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Response struct {
@@ -39,6 +41,7 @@ type Dashboard struct {
 	RefreshTime uint16             `json:"refresh_time"`
 	Widgets     []Widget           `json:"widgets,omitempty"`
 	Index       *uint16            `json:"index,omitempty"`
+	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt,omitempty"`
 }
 
 type Widget struct {
@@ -49,10 +52,10 @@ type Widget struct {
 }
 
 type WidgetPosition struct {
-	Id    primitive.ObjectID `json:"id"`
-	Index *int             `json:"index"`
-	DashboardOrigin string `json:"dashboardOrigin"`
-	DashboardDestination string `json:"dashboardDestination"`
+	Id                   primitive.ObjectID `json:"id"`
+	Index                *int               `json:"index"`
+	DashboardOrigin      string             `json:"dashboardOrigin"`
+	DashboardDestination string             `json:"dashboardDestination"`
 }
 
 func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widget, err error) {
@@ -64,13 +67,12 @@ func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widge
 	return 0, result, errors.New("No widget with id:" + id.String())
 }
 
-
 func updateWidgetProperty(widget Widget, propertyToChange string, newValue interface{}) (Widget, error) {
 	propertyPath := strings.Split(propertyToChange, ".")
 	i_last_prop := len(propertyPath) - 1
 	var currentValue interface{}
 	currentValue = widget.Properties
-	
+
 	for i, property := range propertyPath {
 		val := reflect.ValueOf(currentValue)
 
@@ -85,8 +87,8 @@ func updateWidgetProperty(widget Widget, propertyToChange string, newValue inter
 				return Widget{}, errors.New(fmt.Sprintf("Property %s not found", property))
 			}
 			currentValue = temp.Interface()
-		} 
-	} 
+		}
+	}
 
 	return widget, nil
 }
@@ -110,7 +112,7 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 				element.Name = newValue.(string)
 				widgets = append(widgets, element)
 				continue
-			} 
+			}
 
 			if propertyToChange == "properties" {
 				element.Properties = newValue
@@ -123,7 +125,7 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 				return err
 			}
 			widgets = append(widgets, updatedWidget)
-			
+
 		} else {
 			widgets = append(widgets, element)
 		}
@@ -164,11 +166,11 @@ func (this *Dashboard) NewIndexIsInValid(index int) bool {
 }
 
 func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
-	if this.NewIndexIsInValid(index) { 
+	if this.NewIndexIsInValid(index) {
 		return errors.New(fmt.Sprintf("Insert Index %d out of bounds", index))
 	}
 	this.Widgets = insertAt[Widget](this.Widgets, widget, index)
-	return nil 
+	return nil
 }
 
 func (this *Dashboard) removeWidgetAt(index int) (err error) {

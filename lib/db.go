@@ -52,6 +52,10 @@ func InitDB() {
 	if err != nil {
 		panic("could not migrate dashboard indices: " + err.Error())
 	}
+	err = migrateUpdatedAt()
+	if err != nil {
+		panic("could not migrate dashboard updatedAt: " + err.Error())
+	}
 }
 
 func Mongo() *mongo.Collection {

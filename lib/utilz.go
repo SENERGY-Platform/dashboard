@@ -21,6 +21,7 @@ package lib
 import (
 	"net/http"
 	"strings"
+	"time"
 )
 
 func getUserId(r *http.Request) (userId string) {
@@ -39,4 +40,21 @@ func removeAt[T any](list []T, index int) []T {
 func insertAt[T any](list []T, value T, index int) []T {
 	listWithValue := append([]T{value}, list[index:]...)
 	return append(list[:index], listWithValue...)
+}
+
+func parseModifiedSince(req *http.Request) *time.Time {
+	str := req.Header.Get("If-Modified-Since")
+	if len(str) == 0 {
+		return nil
+	}
+	t, err := time.Parse(http.TimeFormat, str)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+func addCacheControlHeaders(w http.ResponseWriter, t time.Time) {
+	w.Header().Add("Last-Modified", t.Format(http.TimeFormat))
+	w.Header().Add("Cache-Control", "no-store")
 }

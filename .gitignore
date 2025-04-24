@@ -2,3 +2,5 @@
 .env
 dashboard
 vendor
+__debug*
+.vscode

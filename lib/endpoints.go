@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -61,23 +62,42 @@ func (e *Endpoint) createDashboardEndpoint(w http.ResponseWriter, req *http.Requ
 
 func (e *Endpoint) getDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
 	ctx := context.TODO()
-	dashboard, err := getDashboard(vars["id"], getUserId(req), ctx)
+	t := parseModifiedSince(req)
+	modified, dashboard, err := getDashboard(t, vars["id"], getUserId(req), ctx)
 	if err != nil {
 		w.WriteHeader(404)
 	}
+	if t != nil && !modified {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	addCacheControlHeaders(w, dashboard.UpdatedAt)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 	json.NewEncoder(w).Encode(dashboard)
 }
 
 func (e *Endpoint) getDashboardsEndpoint(w http.ResponseWriter, req *http.Request) {
-	dashboards, err := getDashboards(getUserId(req))
+	t := parseModifiedSince(req)
+	modified, dashboards, err := getDashboards(t, getUserId(req))
 	if err != nil {
 		http.Error(w, "Error while reading dashboards: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if t != nil && !modified {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
+	latest := time.Unix(0, 0)
+	for _, dash := range dashboards {
+		if dash.UpdatedAt.After(latest) {
+			latest = dash.UpdatedAt
+		}
+	}
+	latest = latest.Truncate(time.Second)
+	addCacheControlHeaders(w, latest)
 	w.WriteHeader(200)
 	json.NewEncoder(w).Encode(&dashboards)
 }
@@ -103,7 +123,7 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 	dashboardId := vars["id"]
 	userId := getUserId(req)
 	ctx := context.TODO()
-	oldDashboard, err := getDashboard(dashboardId, userId, ctx)
+	_, oldDashboard, err := getDashboard(nil, dashboardId, userId, ctx)
 	dashReq.Widgets = oldDashboard.Widgets
 
 	dash, err := updateDashboard(dashReq, dashboardId, userId, ctx)
@@ -119,9 +139,15 @@ func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Reques
 
 func (e *Endpoint) getWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
+	t := parseModifiedSince(req)
+	modified, lastModified, widget := getWidget(t, vars["dashboardId"], vars["widgetId"], getUserId(req))
+	if t != nil && !modified {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	addCacheControlHeaders(w, *lastModified)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	widget := getWidget(vars["dashboardId"], vars["widgetId"], getUserId(req))
 	json.NewEncoder(w).Encode(widget)
 }
 
@@ -132,12 +158,12 @@ func (e *Endpoint) editSingleWidgetPropertyEndpoint(w http.ResponseWriter, req *
 		return
 	}
 
-	var newValue interface{} 
+	var newValue interface{}
 	err = json.Unmarshal(payload, &newValue)
 	if err != nil {
 		newValue = string(payload)
 	}
-	
+
 	vars := mux.Vars(req)
 	err = updateWidget(vars["dashboardId"], newValue, vars["property"], vars["widgetId"], getUserId(req))
 	if err != nil {
@@ -156,12 +182,12 @@ func (e *Endpoint) editWidgetPropertyEndpoint(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	var newValue interface{} 
+	var newValue interface{}
 	err = json.Unmarshal(payload, &newValue)
 	if err != nil {
 		newValue = string(payload)
 	}
-	
+
 	vars := mux.Vars(req)
 	err = updateWidget(vars["dashboardId"], newValue, "properties", vars["widgetId"], getUserId(req))
 	if err != nil {
@@ -217,7 +243,7 @@ func (e *Endpoint) createWidgetEndpoint(w http.ResponseWriter, req *http.Request
 	if err != nil {
 		fmt.Println("Could not decode Widget Request data." + err.Error())
 		http.Error(w, "Error while decoding widget data: "+err.Error(), http.StatusInternalServerError)
-		return 
+		return
 	}
 
 	vars := mux.Vars(req)
