@@ -39,21 +39,28 @@ type Dashboard struct {
 	Name        string             `json:"name,omitempty"`
 	UserId      string             `json:"user_id,omitempty"`
 	RefreshTime uint16             `json:"refresh_time"`
-	Widgets     []Widget           `json:"widgets,omitempty"`
+	Widgets     []Widget           `json:"widgets"`
 	Index       *uint16            `json:"index,omitempty"`
 	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt,omitempty"`
 }
 
 type Widget struct {
 	Id         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	X          *int               `json:"x,omitempty"`
+	Y          *int               `json:"y,omitempty"`
+	W          *int               `json:"w,omitempty"`
+	H          *int               `json:"h,omitempty"`
 	Name       string             `json:"name,omitempty"`
 	Type       string             `json:"type,omitempty"`
 	Properties interface{}        `json:"properties,omitempty"`
 }
 
 type WidgetPosition struct {
-	Id                   primitive.ObjectID `json:"id"`
-	Index                *int               `json:"index"`
+	Id                   primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	X                    *int               `json:"x,omitempty"`
+	Y                    *int               `json:"y,omitempty"`
+	W                    *int               `json:"w,omitempty"`
+	H                    *int               `json:"h,omitempty"`
 	DashboardOrigin      string             `json:"dashboardOrigin"`
 	DashboardDestination string             `json:"dashboardDestination"`
 }
@@ -136,28 +143,6 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 	}
 
 	this.Widgets = widgets
-	return nil
-}
-
-func (this *Dashboard) SwapWidgetPosition(widgetPosition WidgetPosition) (err error) {
-	oldPosition, widget, err := this.GetWidget(widgetPosition.Id)
-	if err != nil {
-		return err
-	}
-	err = this.removeWidgetAt(oldPosition)
-	if err != nil {
-		return err
-	}
-
-	if widgetPosition.Index != nil {
-		err = this.insertWidgetAt(*widgetPosition.Index, widget)
-	} else {
-		err = this.insertWidgetAt(len(this.Widgets), widget)
-	}
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

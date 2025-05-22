@@ -20,7 +20,6 @@ package lib
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -194,8 +193,12 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
 	ctx := context.TODO()
 
+	w, err := strconv.Atoi(GetEnv("MONGO_WRITE_CONCERN", "2"))
+	if err != nil {
+		return err
+	}
 	wc := writeconcern.WriteConcern{
-		W: 2,
+		W: w,
 	}
 	txnOptions := options.Transaction().SetWriteConcern(&wc)
 	// Starts a session on the client
@@ -224,22 +227,23 @@ func updateWidget(dashboardId string, value interface{}, propertyToChange string
 	return err
 }
 
-func swapWidgetInsideDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
+func updateWidgetPositionInDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
 	dashboardId := positionUpdate.DashboardOrigin
 	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 	if err != nil {
 		return err
 	}
 
-	if positionUpdate.Index != nil && dash.NewIndexIsInValid(*positionUpdate.Index) {
-		return errors.New("New index is out of bound")
-	}
-
-	err = dash.SwapWidgetPosition(positionUpdate)
+	i, _, err := dash.GetWidget(positionUpdate.Id)
 	if err != nil {
-		fmt.Println("Error Could not swap widget positions: ", err)
 		return err
 	}
+
+	dash.Widgets[i].X = positionUpdate.X
+	dash.Widgets[i].Y = positionUpdate.Y
+	dash.Widgets[i].W = positionUpdate.W
+	dash.Widgets[i].H = positionUpdate.H
+
 	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 	if err != nil {
 		fmt.Println("Error Could not update dashboard after swapping positions: ", err)
@@ -248,7 +252,7 @@ func swapWidgetInsideDashboard(positionUpdate WidgetPosition, userId string, ctx
 	return nil
 }
 
-func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
+func moveWidgetBetweenDashboards(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
 	_, oldDash, err := getDashboard(nil, positionUpdate.DashboardOrigin, userId, ctx)
 	if err != nil {
 		return err
@@ -273,6 +277,10 @@ func swapWidgetBetweenDashboard(positionUpdate WidgetPosition, userId string, ct
 		return err
 	}
 
+	widget.X = positionUpdate.X
+	widget.Y = positionUpdate.Y
+	widget.W = positionUpdate.W
+	widget.H = positionUpdate.H
 	err = newDash.insertWidgetAt(len(newDash.Widgets), widget)
 	if err != nil {
 		return err
@@ -291,9 +299,16 @@ func updateWidgetPositions(positionUpdates []WidgetPosition, userId string) (err
 	ctx := context.TODO()
 	for _, positionUpdate := range positionUpdates {
 		if positionUpdate.DashboardOrigin == positionUpdate.DashboardDestination {
-			return swapWidgetInsideDashboard(positionUpdate, userId, ctx)
+			err = updateWidgetPositionInDashboard(positionUpdate, userId, ctx)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = moveWidgetBetweenDashboards(positionUpdate, userId, ctx)
+			if err != nil {
+				return err
+			}
 		}
-		return swapWidgetBetweenDashboard(positionUpdate, userId, ctx)
 	}
 
 	return err
@@ -354,6 +369,7 @@ func migrateUpdatedAt() (err error) {
 func createDefaultDashboard(userId string) (result Dashboard, err error) {
 	result.Id = primitive.NewObjectID()
 	uZero := uint16(0)
+	result.UpdatedAt = time.Now()
 	result.Index = &uZero
 	result.UserId = userId
 	result.Name = "System"
