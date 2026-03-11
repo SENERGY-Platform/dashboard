@@ -26,9 +26,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 func createDashboard(dash Dashboard, userId string) (result Dashboard, err error) {
@@ -192,39 +190,19 @@ func createWidget(dashboardId string, widget Widget, userId string) (result Widg
 
 func updateWidget(dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
 	ctx := context.TODO()
-
-	w, err := strconv.Atoi(GetEnv("MONGO_WRITE_CONCERN", "2"))
+	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
 	if err != nil {
 		return err
 	}
-	wc := writeconcern.WriteConcern{
-		W: w,
-	}
-	txnOptions := options.Transaction().SetWriteConcern(&wc)
-	// Starts a session on the client
-	session, err := DB.StartSession()
+	err = dash.updateWidget(value, propertyToChange, widgetID)
 	if err != nil {
-		panic(err)
+		fmt.Println("Error updateWidget: ", err)
+		return err
 	}
-	// Defers ending the session after the transaction is committed or ended
-	defer session.EndSession(ctx)
-
-	_, err = session.WithTransaction(ctx, func(ctx mongo.SessionContext) (interface{}, error) {
-		_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = dash.updateWidget(value, propertyToChange, widgetID)
-		if err != nil {
-			fmt.Println("Error updateWidget: ", err)
-			return nil, err
-		}
-		dash, err = updateDashboard(dash, dashboardId, userId, ctx)
-
-		return nil, err
-	}, txnOptions)
+	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 
 	return err
+
 }
 
 func updateWidgetPositionInDashboard(positionUpdate WidgetPosition, userId string, ctx context.Context) (err error) {
