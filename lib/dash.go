@@ -21,10 +21,10 @@ package lib
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strconv"
 	"time"
 
+	"github.com/SENERGY-Platform/dashboard/lib/log"
+	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -53,7 +53,7 @@ func createDashboard(ctx context.Context, dash Dashboard, userId string) (result
 	dash.UpdatedAt = time.Now()
 	_, err = Mongo().InsertOne(ctx, dash)
 	if err != nil {
-		fmt.Println("Error create:", err)
+		log.Logger.Error("create dashboard failed", attributes.ErrorKey, err)
 		return result, normalizeModelError(err)
 	}
 	return dash, nil
@@ -67,7 +67,7 @@ func getDashboard(ifNotModifiedSince *time.Time, id string, userId string, ctx c
 
 	err = Mongo().FindOne(ctx, bson.M{"_id": objectId, "userid": userId}).Decode(&dash)
 	if err != nil {
-		fmt.Println("Error find:", err)
+		log.Logger.Error("find dashboard failed", attributes.ErrorKey, err)
 		return false, dash, normalizeModelError(err)
 	}
 	modified = true
@@ -88,10 +88,10 @@ func getDashboards(ctx context.Context, ifNotModifiedSince *time.Time, userId st
 	}
 
 	if len(dashs) == 0 {
-		fmt.Println("User has no dashboards, creating default")
+		log.Logger.Info("user has no dashboards, creating default")
 		dash, err := createDefaultDashboard(ctx, userId)
 		if err != nil {
-			fmt.Println("ERROR: could not create default dashboard: ", err.Error())
+			log.Logger.Error("create default dashboard failed", attributes.ErrorKey, err)
 		} else {
 			dashs = append(dashs, dash)
 		}
@@ -117,12 +117,12 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 
 	err = Mongo().FindOne(ctx, bson.M{"_id": objectId, "userid": userId}).Decode(&old)
 	if err != nil {
-		fmt.Println("Error remove:", err)
+		log.Logger.Error("read dashboard before delete failed", attributes.ErrorKey, err)
 		return Response{}, normalizeModelError(err)
 	}
 	_, err = Mongo().DeleteOne(ctx, bson.M{"_id": objectId, "userid": userId})
 	if err != nil {
-		fmt.Println("Error remove:", err)
+		log.Logger.Error("delete dashboard failed", attributes.ErrorKey, err)
 		return Response{}, normalizeModelError(err)
 	}
 
@@ -131,12 +131,12 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 		info, err := Mongo().UpdateMany(ctx,
 			bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
 		if err != nil {
-			fmt.Println("Error remove:", err)
+			log.Logger.Error("update dashboard indices after delete failed", attributes.ErrorKey, err)
 			return Response{}, normalizeModelError(err)
 		}
-		fmt.Println("Deletion of dashboard caused updating of indices of " + strconv.Itoa(int(info.ModifiedCount)) + " other dashboards")
+		log.Logger.Info("updated dashboard indices after delete", "modified_count", info.ModifiedCount)
 	} else {
-		fmt.Println("Dashboard had no index, skipping update of other dashboards")
+		log.Logger.Info("dashboard had no index, skipping update of other dashboards")
 	}
 	return Response{"ok"}, nil
 }
@@ -155,7 +155,7 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, 
 	_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
 
 	if err != nil {
-		fmt.Println("Error update:", err)
+		log.Logger.Error("update dashboard failed", attributes.ErrorKey, err)
 		return Dashboard{}, normalizeModelError(err)
 	}
 	return newDashboard, nil
@@ -169,19 +169,19 @@ func getWidget(ctx context.Context, ifNotModifiedSince *time.Time, dashboardId s
 	}
 	err = Mongo().FindOne(ctx, bson.M{"_id": objectID, "userid": userId}).Decode(&dash)
 	if err != nil {
-		fmt.Println("Error find:", err)
+		log.Logger.Error("find dashboard for widget read failed", attributes.ErrorKey, err)
 		return false, nil, Widget{}, normalizeModelError(err)
 	}
 
 	id, err := primitive.ObjectIDFromHex(widgetId)
 	if err != nil {
-		fmt.Println("Error get id from hex: ", err)
+		log.Logger.Error("parse widget id failed", attributes.ErrorKey, err)
 		return false, nil, Widget{}, normalizeModelError(err)
 	}
 
 	_, widget, err = dash.GetWidget(id)
 	if err != nil {
-		fmt.Println("Error getWidget: ", err)
+		log.Logger.Error("get widget from dashboard failed", attributes.ErrorKey, err)
 		return false, nil, Widget{}, normalizeModelError(err)
 	}
 	modified = true
@@ -199,7 +199,7 @@ func createWidget(ctx context.Context, dashboardId string, widget Widget, userId
 	}
 	widgetResult, err := dash.addWidget(widget)
 	if err != nil {
-		fmt.Println("Error createWidget: ", err)
+		log.Logger.Error("create widget failed", attributes.ErrorKey, err)
 		return result, err
 	}
 	_, err = updateDashboard(dash, dashboardId, userId, ctx)
@@ -214,7 +214,7 @@ func updateWidget(ctx context.Context, dashboardId string, value interface{}, pr
 	}
 	err = dash.updateWidget(value, propertyToChange, widgetID)
 	if err != nil {
-		fmt.Println("Error updateWidget: ", err)
+		log.Logger.Error("update widget failed", attributes.ErrorKey, err)
 		return err
 	}
 	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
@@ -242,7 +242,7 @@ func updateWidgetPositionInDashboard(positionUpdate WidgetPosition, userId strin
 
 	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 	if err != nil {
-		fmt.Println("Error Could not update dashboard after swapping positions: ", err)
+		log.Logger.Error("update dashboard after widget position swap failed", attributes.ErrorKey, err)
 		return err
 	}
 	return nil
@@ -269,7 +269,7 @@ func moveWidgetBetweenDashboards(positionUpdate WidgetPosition, userId string, c
 	}
 	_, err = updateDashboard(oldDash, positionUpdate.DashboardOrigin, userId, ctx)
 	if err != nil {
-		fmt.Println("Error Could not update dashboard ", err)
+		log.Logger.Error("update source dashboard after widget move failed", attributes.ErrorKey, err)
 		return err
 	}
 
@@ -284,7 +284,7 @@ func moveWidgetBetweenDashboards(positionUpdate WidgetPosition, userId string, c
 
 	_, err = updateDashboard(newDash, positionUpdate.DashboardDestination, userId, ctx)
 	if err != nil {
-		fmt.Println("Error Could not update dashboard", err)
+		log.Logger.Error("update destination dashboard after widget move failed", attributes.ErrorKey, err)
 		return err
 	}
 
@@ -316,7 +316,7 @@ func deleteWidget(ctx context.Context, dashboardId string, widgetId string, user
 	}
 	err = dash.deleteWidget(widgetId)
 	if err != nil {
-		fmt.Println("Error deleteWidget: ", err)
+		log.Logger.Error("delete widget failed", attributes.ErrorKey, err)
 		return err
 	}
 	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
@@ -325,7 +325,7 @@ func deleteWidget(ctx context.Context, dashboardId string, widgetId string, user
 }
 
 func migrateDashboardIndices() (err error) {
-	fmt.Println("Adding indices to dashboards when needed")
+	log.Logger.Info("adding indices to dashboards when needed")
 	var dashs []Dashboard
 	ctx := context.TODO()
 	opts := options.Find().SetSort(bson.D{{Key: "userid", Value: 1}})
@@ -345,7 +345,7 @@ func migrateDashboardIndices() (err error) {
 		lastUserId = dash.UserId
 		if dash.Index == nil {
 			dash.Index = &userIndex
-			fmt.Println("Adding index " + strconv.Itoa(int(userIndex)) + " to dashboard " + dash.Id.Hex() + " of user " + dash.UserId)
+			log.Logger.Info("adding dashboard index", "index", userIndex, "dashboard_id", dash.Id.Hex(), "user_id", dash.UserId)
 			updateDashboard(dash, dash.Id.Hex(), dash.UserId, context.TODO())
 		}
 		userIndex++
@@ -354,7 +354,7 @@ func migrateDashboardIndices() (err error) {
 }
 
 func migrateUpdatedAt() (err error) {
-	fmt.Println("Adding updatedAt to dashboards when needed")
+	log.Logger.Info("adding updatedAt to dashboards when needed")
 	ctx := context.TODO()
 	_, err = Mongo().UpdateMany(ctx, bson.M{"updatedAt": bson.M{"$exists": false}}, bson.M{"$currentDate": bson.M{"updatedAt": bson.M{"$type": "timestamp"}}})
 	return err
@@ -436,7 +436,7 @@ func createDefaultDashboard(ctx context.Context, userId string) (result Dashboar
 
 	_, err = Mongo().InsertOne(ctx, result)
 	if err != nil {
-		fmt.Println("Error create:", err)
+		log.Logger.Error("create default dashboard failed", attributes.ErrorKey, err)
 		return result, err
 	}
 	return result, nil

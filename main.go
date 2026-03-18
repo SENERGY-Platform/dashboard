@@ -31,7 +31,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Logger.Error("Error loading .env file", attributes.ErrorKey, err)
+		log.Logger.Warn("Error loading .env file", attributes.ErrorKey, err)
 	}
 
 	if os.Getenv("SYNC") == "true" {

@@ -20,10 +20,10 @@ package lib
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"time"
 
+	"github.com/SENERGY-Platform/dashboard/lib/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -45,7 +45,7 @@ func InitDB() {
 	if err != nil {
 		panic("database connect failed: " + err.Error())
 	} else {
-		fmt.Println("Successfully connected to DB!")
+		log.Logger.Info("successfully connected to db")
 	}
 	DB = client
 	err = migrateDashboardIndices()

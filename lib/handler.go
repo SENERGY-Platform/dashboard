@@ -19,7 +19,6 @@
 package lib
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/SENERGY-Platform/dashboard/lib/log"
@@ -39,7 +38,7 @@ import (
 // @in header
 // @name Authorization
 func CreateServer() {
-	fmt.Println("Start Server")
+	log.Logger.Info("start server")
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
