@@ -19,9 +19,10 @@
 package lib
 
 import (
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/SENERGY-Platform/dashboard/lib/log"
 )
 
 func NewLogger(handler http.Handler) *LoggerMiddleWare {
@@ -47,7 +48,34 @@ func (this *LoggerMiddleWare) log(request *http.Request, response *ResponseWrite
 	method := request.Method
 	path := request.URL
 	status := response.Status
-	log.Printf("[%v] %v %v %v\n", method, path, status, time.Since(t))
+	duration := time.Since(t)
+
+	if status >= http.StatusInternalServerError {
+		log.Logger.Error("request completed",
+			"method", method,
+			"path", path.String(),
+			"status", status,
+			"duration", duration,
+		)
+		return
+	}
+
+	if status >= http.StatusBadRequest {
+		log.Logger.Warn("request completed",
+			"method", method,
+			"path", path.String(),
+			"status", status,
+			"duration", duration,
+		)
+		return
+	}
+
+	log.Logger.Info("request completed",
+		"method", method,
+		"path", path.String(),
+		"status", status,
+		"duration", duration,
+	)
 }
 
 type ResponseWriterWithStatusCodeLog struct {

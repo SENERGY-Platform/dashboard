@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 
+	"github.com/SENERGY-Platform/dashboard/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -101,7 +101,10 @@ func updateWidgetProperty(widget Widget, propertyToChange string, newValue inter
 }
 
 func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange string, widgetId string) (err error) {
-	log.Printf("Update widget property: %s to value: %s", propertyToChange, newValue)
+	log.Logger.Debug("update widget property",
+		"property", propertyToChange,
+		"value", newValue,
+	)
 
 	widgets := []Widget{}
 	updated := false

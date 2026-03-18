@@ -19,17 +19,19 @@
 package main
 
 import (
-	"log"
 	"os"
+
+	"github.com/SENERGY-Platform/dashboard/lib/log"
+	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 
 	"github.com/SENERGY-Platform/dashboard/lib"
 	"github.com/joho/godotenv"
 )
 
-func main()  {
+func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("Error loading .env file")
+		log.Logger.Error("Error loading .env file", attributes.ErrorKey, err)
 	}
 
 	if os.Getenv("SYNC") == "true" {

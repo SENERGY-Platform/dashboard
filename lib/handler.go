@@ -20,9 +20,10 @@ package lib
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
+	"github.com/SENERGY-Platform/dashboard/lib/log"
+	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
@@ -55,5 +56,9 @@ func CreateServer() {
 		})
 	handler := c.Handler(router)
 	logger := NewLogger(handler)
-	log.Fatal(http.ListenAndServe(":8080", logger))
+	err := http.ListenAndServe(":8080", logger)
+	if err != nil {
+		log.Logger.Error("listen and serve failed", attributes.ErrorKey, err)
+		panic(err)
+	}
 }
