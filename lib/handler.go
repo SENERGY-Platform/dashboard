@@ -69,8 +69,7 @@ func CreateServer() {
 	router.DELETE("/widgets/:dashboardId/:widgetId", deleteWidgetEndpoint)
 
 	router.PATCH("/widgets/name/:dashboardId/:widgetId", editWidgetNameEndpoint)
-	router.PATCH("/widgets/properties/:dashboardId/:widgetId", editWidgetPropertyEndpoint)
-	router.PATCH("/widgets/properties/:property/:dashboardId/:widgetId", editSingleWidgetPropertyEndpoint)
+	router.PATCH("/widgets/properties/*path", editWidgetPropertiesDispatchEndpoint)
 
 	log.Logger.Info("listen on port", "port", "8080")
 	err := http.ListenAndServe(":8080", router)

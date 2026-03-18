@@ -260,6 +260,32 @@ func editSingleWidgetPropertyEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{"OK"})
 }
 
+func editWidgetPropertiesDispatchEndpoint(c *gin.Context) {
+	rawPath := strings.Trim(c.Param("path"), "/")
+	parts := strings.Split(rawPath, "/")
+
+	switch len(parts) {
+	case 2:
+		c.Params = append(c.Params,
+			gin.Param{Key: "dashboardId", Value: parts[0]},
+			gin.Param{Key: "widgetId", Value: parts[1]},
+		)
+		editWidgetPropertyEndpoint(c)
+		return
+	case 3:
+		c.Params = append(c.Params,
+			gin.Param{Key: "property", Value: parts[0]},
+			gin.Param{Key: "dashboardId", Value: parts[1]},
+			gin.Param{Key: "widgetId", Value: parts[2]},
+		)
+		editSingleWidgetPropertyEndpoint(c)
+		return
+	default:
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("invalid widgets/properties path")))
+		return
+	}
+}
+
 // editWidgetPropertyEndpoint godoc
 // @Summary Update widget properties
 // @Description Updates the complete properties object of a widget.
