@@ -23,40 +23,47 @@ import (
 	"net/http"
 
 	"github.com/SENERGY-Platform/dashboard/lib/log"
+	gin_mw "github.com/SENERGY-Platform/gin-middleware"
 	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
-	"github.com/gorilla/mux"
-	"github.com/rs/cors"
+	"github.com/gin-contrib/requestid"
+	"github.com/gin-gonic/gin"
 )
 
 func CreateServer() {
 	fmt.Println("Start Server")
-	router := mux.NewRouter()
-	e := NewEndpoint()
-	router.HandleFunc("/", e.getRootEndpoint).Methods("GET")
-	router.HandleFunc("/dashboards", e.getDashboardsEndpoint).Methods("GET")
-	router.HandleFunc("/dashboards", e.createDashboardEndpoint).Methods("POST")
-	router.HandleFunc("/dashboards/{id}", e.getDashboardEndpoint).Methods("GET")
-	router.HandleFunc("/dashboards/{id}", e.deleteDashboardEndpoint).Methods("DELETE")
-	router.HandleFunc("/dashboards/{id}", e.editDashboardEndpoint).Methods("PUT")
 
-	router.HandleFunc("/widgets/positions", e.editWidgetPosition).Methods("PATCH")
-	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.getWidgetEndpoint).Methods("GET")
-	router.HandleFunc("/widgets/{dashboardId}", e.createWidgetEndpoint).Methods("POST")
-	router.HandleFunc("/widgets/{dashboardId}/{widgetId}", e.deleteWidgetEndpoint).Methods("DELETE")
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(
+		gin_mw.StructLoggerHandlerWithDefaultGenerators(
+			log.Logger.With(attributes.LogRecordTypeKey, attributes.HttpAccessLogRecordTypeVal),
+			attributes.Provider,
+			[]string{},
+			nil,
+		),
+		requestid.New(requestid.WithCustomHeaderStrKey("X-Request-ID")),
+		gin_mw.ErrorHandler(GetStatusCode, ", "),
+		gin_mw.StructRecoveryHandler(log.Logger, gin_mw.DefaultRecoveryFunc),
+	)
 
-	router.HandleFunc("/widgets/name/{dashboardId}/{widgetId}", e.editWidgetNameEndpoint).Methods("PATCH")
-	router.HandleFunc("/widgets/properties/{dashboardId}/{widgetId}", e.editWidgetPropertyEndpoint).Methods("PATCH")
-	router.HandleFunc("/widgets/properties/{property}/{dashboardId}/{widgetId}", e.editSingleWidgetPropertyEndpoint).Methods("PATCH")
+	router.GET("/", getRootEndpoint)
+	router.GET("/dashboards", getDashboardsEndpoint)
+	router.POST("/dashboards", createDashboardEndpoint)
+	router.GET("/dashboards/:id", getDashboardEndpoint)
+	router.DELETE("/dashboards/:id", deleteDashboardEndpoint)
+	router.PUT("/dashboards/:id", editDashboardEndpoint)
 
-	c := cors.New(
-		cors.Options{
-			AllowedHeaders: []string{"Content-Type", "Authorization", "If-modified-since"},
-			AllowedOrigins: []string{"*"},
-			AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"},
-		})
-	handler := c.Handler(router)
-	logger := NewLogger(handler)
-	err := http.ListenAndServe(":8080", logger)
+	router.PATCH("/widgets/positions", editWidgetPosition)
+	router.GET("/widgets/:dashboardId/:widgetId", getWidgetEndpoint)
+	router.POST("/widgets/:dashboardId", createWidgetEndpoint)
+	router.DELETE("/widgets/:dashboardId/:widgetId", deleteWidgetEndpoint)
+
+	router.PATCH("/widgets/name/:dashboardId/:widgetId", editWidgetNameEndpoint)
+	router.PATCH("/widgets/properties/:dashboardId/:widgetId", editWidgetPropertyEndpoint)
+	router.PATCH("/widgets/properties/:property/:dashboardId/:widgetId", editSingleWidgetPropertyEndpoint)
+
+	log.Logger.Info("listen on port", "port", "8080")
+	err := http.ListenAndServe(":8080", router)
 	if err != nil {
 		log.Logger.Error("listen and serve failed", attributes.ErrorKey, err)
 		panic(err)

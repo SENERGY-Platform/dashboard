@@ -22,10 +22,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
-func getUserId(r *http.Request) (userId string) {
-	userId = r.Header.Get("X-UserId")
+func getUserId(c *gin.Context) (userId string) {
+	userId = c.GetHeader("X-UserId")
 	if userId == "" {
 		userId = "testUser"
 	}
@@ -42,8 +44,8 @@ func insertAt[T any](list []T, value T, index int) []T {
 	return append(list[:index], listWithValue...)
 }
 
-func parseModifiedSince(req *http.Request) *time.Time {
-	str := req.Header.Get("If-Modified-Since")
+func parseModifiedSince(c *gin.Context) *time.Time {
+	str := c.GetHeader("If-Modified-Since")
 	if len(str) == 0 {
 		return nil
 	}
@@ -54,7 +56,7 @@ func parseModifiedSince(req *http.Request) *time.Time {
 	return &t
 }
 
-func addCacheControlHeaders(w http.ResponseWriter, t time.Time) {
-	w.Header().Add("Last-Modified", t.Format(http.TimeFormat))
-	w.Header().Add("Cache-Control", "no-store")
+func addCacheControlHeaders(c *gin.Context, t time.Time) {
+	c.Header("Last-Modified", t.Format(http.TimeFormat))
+	c.Header("Cache-Control", "no-store")
 }

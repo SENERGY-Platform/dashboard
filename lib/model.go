@@ -71,7 +71,7 @@ func (this *Dashboard) GetWidget(id primitive.ObjectID) (index int, result Widge
 			return index, element, nil
 		}
 	}
-	return 0, result, errors.New("No widget with id:" + id.String())
+	return 0, result, errors.Join(ErrNotFound, errors.New("No widget with id:"+id.String()))
 }
 
 func updateWidgetProperty(widget Widget, propertyToChange string, newValue interface{}) (Widget, error) {
@@ -91,7 +91,7 @@ func updateWidgetProperty(widget Widget, propertyToChange string, newValue inter
 
 			temp := val.MapIndex(reflect.ValueOf(property)) // why interface?
 			if !temp.IsValid() {
-				return Widget{}, errors.New(fmt.Sprintf("Property %s not found", property))
+				return Widget{}, errors.Join(ErrNotFound, fmt.Errorf("Property %s not found", property))
 			}
 			currentValue = temp.Interface()
 		}
@@ -111,7 +111,7 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 
 	widgetObjectId, err := primitive.ObjectIDFromHex(widgetId)
 	if err != nil {
-		return
+		return errors.Join(ErrBadRequest, err)
 	}
 
 	for _, element := range this.Widgets {
@@ -142,7 +142,7 @@ func (this *Dashboard) updateWidget(newValue interface{}, propertyToChange strin
 	}
 
 	if !updated {
-		return errors.New("widget id is not matching")
+		return errors.Join(ErrNotFound, errors.New("widget id is not matching"))
 	}
 
 	this.Widgets = widgets
@@ -155,17 +155,17 @@ func (this *Dashboard) NewIndexIsInValid(index int) bool {
 
 func (this *Dashboard) insertWidgetAt(index int, widget Widget) (err error) {
 	if this.NewIndexIsInValid(index) {
-		return errors.New(fmt.Sprintf("Insert Index %d out of bounds", index))
+		return errors.Join(ErrBadRequest, fmt.Errorf("Insert Index %d out of bounds", index))
 	}
-	this.Widgets = insertAt[Widget](this.Widgets, widget, index)
+	this.Widgets = insertAt(this.Widgets, widget, index)
 	return nil
 }
 
 func (this *Dashboard) removeWidgetAt(index int) (err error) {
 	if this.NewIndexIsInValid(index) {
-		return errors.New(fmt.Sprintf("Removal Index %d out of bounds", index))
+		return errors.Join(ErrBadRequest, fmt.Errorf("Removal Index %d out of bounds", index))
 	}
-	this.Widgets = removeAt[Widget](this.Widgets, index)
+	this.Widgets = removeAt(this.Widgets, index)
 	return nil
 }
 
@@ -178,7 +178,7 @@ func (this *Dashboard) addWidget(widget Widget) (result Widget, err error) {
 
 func (this *Dashboard) deleteWidget(widgetId string) (err error) {
 	if len(widgetId) == 0 {
-		return errors.New("widget id is empty")
+		return errors.Join(ErrBadRequest, errors.New("widget id is empty"))
 	}
 
 	widgets := []Widget{}
@@ -187,7 +187,7 @@ func (this *Dashboard) deleteWidget(widgetId string) (err error) {
 	for _, element := range this.Widgets {
 		id, err := primitive.ObjectIDFromHex(widgetId)
 		if err != nil {
-			return err
+			return errors.Join(ErrBadRequest, err)
 		}
 		if element.Id == id {
 			deleted = true
@@ -197,7 +197,7 @@ func (this *Dashboard) deleteWidget(widgetId string) (err error) {
 	}
 
 	if !deleted {
-		return errors.New("widget id is not matching")
+		return errors.Join(ErrNotFound, errors.New("widget id is not matching"))
 	}
 
 	this.Widgets = widgets

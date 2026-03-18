@@ -64,7 +64,8 @@ func Mongo() *mongo.Collection {
 }
 
 func CloseDB() {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cf()
 	if err := DB.Disconnect(ctx); err != nil {
 		panic(err)
 	}

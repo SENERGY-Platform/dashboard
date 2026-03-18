@@ -19,77 +19,56 @@
 package lib
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 )
 
-type Endpoint struct {
+func getRootEndpoint(c *gin.Context) {
+	c.JSON(http.StatusOK, Response{"OK"})
 }
 
-func NewEndpoint() *Endpoint {
-	return &Endpoint{}
-}
-
-func (e *Endpoint) getRootEndpoint(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
-}
-
-func (e *Endpoint) createDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
+func createDashboardEndpoint(c *gin.Context) {
 	var dashReq Dashboard
-	err := decoder.Decode(&dashReq)
-	if err != nil {
-		http.Error(w, "Could not decode Dashboard Request data: "+err.Error(), http.StatusInternalServerError)
+	if err := c.ShouldBind(&dashReq); err != nil {
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Could not decode Dashboard Request data"), err))
 		return
 	}
-	result, err := createDashboard(dashReq, getUserId(req))
+	result, err := createDashboard(c.Request.Context(), dashReq, getUserId(c))
 	if err != nil {
-		http.Error(w, "Error while creating dashboard: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while creating dashboard"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(result)
+	c.JSON(http.StatusOK, result)
 }
-
-func (e *Endpoint) getDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	ctx := context.TODO()
-	t := parseModifiedSince(req)
-	modified, dashboard, err := getDashboard(t, vars["id"], getUserId(req), ctx)
+func getDashboardEndpoint(c *gin.Context) {
+	ctx := c.Request.Context()
+	t := parseModifiedSince(c)
+	modified, dashboard, err := getDashboard(t, c.Param("id"), getUserId(c), ctx)
 	if err != nil {
-		w.WriteHeader(404)
-	}
-	if t != nil && !modified {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	addCacheControlHeaders(w, dashboard.UpdatedAt)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(dashboard)
-}
-
-func (e *Endpoint) getDashboardsEndpoint(w http.ResponseWriter, req *http.Request) {
-	t := parseModifiedSince(req)
-	modified, dashboards, err := getDashboards(t, getUserId(req))
-	if err != nil {
-		http.Error(w, "Error while reading dashboards: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while reading dashboard"), err))
 		return
 	}
 	if t != nil && !modified {
-		w.WriteHeader(http.StatusNotModified)
+		c.Status(http.StatusNotModified)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	addCacheControlHeaders(c, dashboard.UpdatedAt)
+	c.JSON(http.StatusOK, dashboard)
+}
+func getDashboardsEndpoint(c *gin.Context) {
+	t := parseModifiedSince(c)
+	modified, dashboards, err := getDashboards(c.Request.Context(), t, getUserId(c))
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while reading dashboards"), err))
+		return
+	}
+	if t != nil && !modified {
+		c.Status(http.StatusNotModified)
+		return
+	}
 	latest := time.Unix(0, 0)
 	for _, dash := range dashboards {
 		if dash.UpdatedAt.After(latest) {
@@ -97,174 +76,133 @@ func (e *Endpoint) getDashboardsEndpoint(w http.ResponseWriter, req *http.Reques
 		}
 	}
 	latest = latest.Truncate(time.Second)
-	addCacheControlHeaders(w, latest)
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(&dashboards)
+	addCacheControlHeaders(c, latest)
+	c.JSON(http.StatusOK, &dashboards)
 }
-
-func (e *Endpoint) deleteDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(deleteDashboard(vars["id"], getUserId(req)))
-}
-
-func (e *Endpoint) editDashboardEndpoint(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
-	var dashReq Dashboard
-	err := decoder.Decode(&dashReq)
+func deleteDashboardEndpoint(c *gin.Context) {
+	result, err := deleteDashboard(c.Request.Context(), c.Param("id"), getUserId(c))
 	if err != nil {
-		fmt.Println("Could not decode Dashboard Request data." + err.Error())
-		http.Error(w, "Error while decoding dashboard: "+err.Error(), http.StatusBadRequest)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while deleting dashboard"), err))
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+func editDashboardEndpoint(c *gin.Context) {
+	var dashReq Dashboard
+	if err := c.ShouldBind(&dashReq); err != nil {
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while decoding dashboard"), err))
 		return
 	}
 
-	vars := mux.Vars(req)
-	dashboardId := vars["id"]
-	userId := getUserId(req)
-	ctx := context.TODO()
+	dashboardId := c.Param("id")
+	userId := getUserId(c)
+	ctx := c.Request.Context()
 	_, oldDashboard, err := getDashboard(nil, dashboardId, userId, ctx)
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while reading dashboard"), err))
+		return
+	}
 	dashReq.Widgets = oldDashboard.Widgets
 
 	dash, err := updateDashboard(dashReq, dashboardId, userId, ctx)
 	if err != nil {
-		http.Error(w, "Error while updating dashboard: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while updating dashboard"), err))
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(dash)
+	c.JSON(http.StatusOK, dash)
 }
-
-func (e *Endpoint) getWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	t := parseModifiedSince(req)
-	modified, lastModified, widget := getWidget(t, vars["dashboardId"], vars["widgetId"], getUserId(req))
+func getWidgetEndpoint(c *gin.Context) {
+	t := parseModifiedSince(c)
+	modified, lastModified, widget, err := getWidget(c.Request.Context(), t, c.Param("dashboardId"), c.Param("widgetId"), getUserId(c))
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while reading widget"), err))
+		return
+	}
 	if t != nil && !modified {
-		w.WriteHeader(http.StatusNotModified)
+		c.Status(http.StatusNotModified)
 		return
 	}
-	addCacheControlHeaders(w, *lastModified)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(widget)
+	addCacheControlHeaders(c, *lastModified)
+	c.JSON(http.StatusOK, widget)
 }
-
-func (e *Endpoint) editSingleWidgetPropertyEndpoint(w http.ResponseWriter, req *http.Request) {
-	payload, err := io.ReadAll(req.Body)
-	if err != nil {
-		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+func editSingleWidgetPropertyEndpoint(c *gin.Context) {
 	var newValue interface{}
-	err = json.Unmarshal(payload, &newValue)
+	err := c.ShouldBind(&newValue)
 	if err != nil {
-		newValue = string(payload)
-	}
-
-	vars := mux.Vars(req)
-	err = updateWidget(vars["dashboardId"], newValue, vars["property"], vars["widgetId"], getUserId(req))
-	if err != nil {
-		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while reading request body"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
+
+	err = updateWidget(c.Request.Context(), c.Param("dashboardId"), newValue, c.Param("property"), c.Param("widgetId"), getUserId(c))
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while updating widget"), err))
+		return
+	}
+	c.JSON(http.StatusOK, Response{"OK"})
 }
-
-func (e *Endpoint) editWidgetPropertyEndpoint(w http.ResponseWriter, req *http.Request) {
-	payload, err := io.ReadAll(req.Body)
-	if err != nil {
-		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+func editWidgetPropertyEndpoint(c *gin.Context) {
 	var newValue interface{}
-	err = json.Unmarshal(payload, &newValue)
+	err := c.ShouldBind(&newValue)
 	if err != nil {
-		newValue = string(payload)
-	}
-
-	vars := mux.Vars(req)
-	err = updateWidget(vars["dashboardId"], newValue, "properties", vars["widgetId"], getUserId(req))
-	if err != nil {
-		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while reading request body"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
+
+	err = updateWidget(c.Request.Context(), c.Param("dashboardId"), newValue, "properties", c.Param("widgetId"), getUserId(c))
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while updating widget"), err))
+		return
+	}
+	c.JSON(http.StatusOK, Response{"OK"})
 }
-
-func (e *Endpoint) editWidgetNameEndpoint(w http.ResponseWriter, req *http.Request) {
-	payload, err := io.ReadAll(req.Body)
+func editWidgetNameEndpoint(c *gin.Context) {
+	var name string
+	err := c.ShouldBind(&name)
 	if err != nil {
-		http.Error(w, "Error while reading request body: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while reading request body"), err))
 		return
 	}
-
-	newValue := string(payload)
-	vars := mux.Vars(req)
-	err = updateWidget(vars["dashboardId"], newValue, "name", vars["widgetId"], getUserId(req))
+	err = updateWidget(c.Request.Context(), c.Param("dashboardId"), name, "name", c.Param("widgetId"), getUserId(c))
 	if err != nil {
-		http.Error(w, "Error while updating widget name: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while updating widget name"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
+	c.JSON(http.StatusOK, Response{"OK"})
 }
-
-func (e *Endpoint) editWidgetPosition(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
+func editWidgetPosition(c *gin.Context) {
 	var widgetReq []WidgetPosition
-	err := decoder.Decode(&widgetReq)
-	if err != nil {
-		fmt.Println("Could not decode Widget Position Request data." + err.Error())
-	}
-
-	err = updateWidgetPositions(widgetReq, getUserId(req))
-	if err != nil {
-		http.Error(w, "Error while updating widget position: "+err.Error(), http.StatusInternalServerError)
+	if err := c.ShouldBind(&widgetReq); err != nil {
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Could not decode Widget Position Request data"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
-}
 
-func (e *Endpoint) createWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
+	err := updateWidgetPositions(c.Request.Context(), widgetReq, getUserId(c))
+	if err != nil {
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while updating widget position"), err))
+		return
+	}
+	c.JSON(http.StatusOK, Response{"OK"})
+}
+func createWidgetEndpoint(c *gin.Context) {
 	var widgetReq Widget
-	err := decoder.Decode(&widgetReq)
-	if err != nil {
-		fmt.Println("Could not decode Widget Request data." + err.Error())
-		http.Error(w, "Error while decoding widget data: "+err.Error(), http.StatusInternalServerError)
+	if err := c.ShouldBind(&widgetReq); err != nil {
+		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while decoding widget data"), err))
 		return
 	}
 
-	vars := mux.Vars(req)
-	result, err := createWidget(vars["dashboardId"], widgetReq, getUserId(req))
+	result, err := createWidget(c.Request.Context(), c.Param("dashboardId"), widgetReq, getUserId(c))
 	if err != nil {
-		http.Error(w, "Error while creating widget: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while creating widget"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(result)
+	c.JSON(http.StatusOK, result)
 }
-
-func (e *Endpoint) deleteWidgetEndpoint(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	err := deleteWidget(vars["dashboardId"], vars["widgetId"], getUserId(req))
+func deleteWidgetEndpoint(c *gin.Context) {
+	err := deleteWidget(c.Request.Context(), c.Param("dashboardId"), c.Param("widgetId"), getUserId(c))
 	if err != nil {
-		http.Error(w, "Error while updating widget: "+err.Error(), http.StatusInternalServerError)
+		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while deleting widget"), err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	json.NewEncoder(w).Encode(Response{"OK"})
+	c.JSON(http.StatusOK, Response{"OK"})
 }
