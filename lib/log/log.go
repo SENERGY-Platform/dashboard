@@ -26,7 +26,7 @@ import (
 
 var Logger *slog.Logger
 
-func Init() {
+func init() {
 	options := &slog.HandlerOptions{
 		AddSource: false,
 		Level:     slog.LevelDebug,
