@@ -1,0 +1,524 @@
+basePath: /
+definitions:
+  lib.Dashboard:
+    properties:
+      id:
+        type: string
+      index:
+        type: integer
+      name:
+        type: string
+      refresh_time:
+        type: integer
+      updatedAt:
+        type: string
+      user_id:
+        type: string
+      widgets:
+        items:
+          $ref: '#/definitions/lib.Widget'
+        type: array
+    type: object
+  lib.Response:
+    properties:
+      message:
+        type: string
+    type: object
+  lib.Widget:
+    properties:
+      h:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      properties: {}
+      type:
+        type: string
+      w:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  lib.WidgetPosition:
+    properties:
+      dashboardDestination:
+        type: string
+      dashboardOrigin:
+        type: string
+      h:
+        type: integer
+      id:
+        type: string
+      w:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: Stores information about dashboards and their widgets.
+  title: Dashboard API
+paths:
+  /:
+    get:
+      description: Returns service availability.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+      summary: Health check
+      tags:
+      - status
+  /dashboards:
+    get:
+      description: Returns all dashboards for the current user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/lib.Dashboard'
+            type: array
+        "304":
+          description: Not Modified
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: List dashboards
+      tags:
+      - dashboards
+    post:
+      consumes:
+      - application/json
+      description: Creates a new dashboard for the current user.
+      parameters:
+      - description: Dashboard payload
+        in: body
+        name: dashboard
+        required: true
+        schema:
+          $ref: '#/definitions/lib.Dashboard'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Dashboard'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create dashboard
+      tags:
+      - dashboards
+  /dashboards/{id}:
+    delete:
+      description: Deletes a dashboard by id.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete dashboard
+      tags:
+      - dashboards
+    get:
+      description: Returns a dashboard by id.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Dashboard'
+        "304":
+          description: Not Modified
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get dashboard
+      tags:
+      - dashboards
+    put:
+      consumes:
+      - application/json
+      description: Updates dashboard metadata by id.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Dashboard payload
+        in: body
+        name: dashboard
+        required: true
+        schema:
+          $ref: '#/definitions/lib.Dashboard'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Dashboard'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update dashboard
+      tags:
+      - dashboards
+  /doc:
+    get:
+      description: Returns the generated Swagger document for this service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get OpenAPI document
+      tags:
+      - documentation
+  /widgets/{dashboardId}:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new widget in a dashboard.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget payload
+        in: body
+        name: widget
+        required: true
+        schema:
+          $ref: '#/definitions/lib.Widget'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Widget'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create widget
+      tags:
+      - widgets
+  /widgets/{dashboardId}/{widgetId}:
+    delete:
+      description: Deletes a widget by dashboard and widget id.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget ID
+        in: path
+        name: widgetId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete widget
+      tags:
+      - widgets
+    get:
+      description: Returns a widget by dashboard and widget id.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget ID
+        in: path
+        name: widgetId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Widget'
+        "304":
+          description: Not Modified
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get widget
+      tags:
+      - widgets
+  /widgets/name/{dashboardId}/{widgetId}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates the name of a widget.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget ID
+        in: path
+        name: widgetId
+        required: true
+        type: string
+      - description: New widget name
+        in: body
+        name: name
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update widget name
+      tags:
+      - widgets
+  /widgets/positions:
+    patch:
+      consumes:
+      - application/json
+      description: Updates positions for multiple widgets.
+      parameters:
+      - description: Widget position updates
+        in: body
+        name: positions
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/lib.WidgetPosition'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update widget positions
+      tags:
+      - widgets
+  /widgets/properties/{dashboardId}/{widgetId}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates the complete properties object of a widget.
+      parameters:
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget ID
+        in: path
+        name: widgetId
+        required: true
+        type: string
+      - description: New properties object
+        in: body
+        name: properties
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update widget properties
+      tags:
+      - widgets
+  /widgets/properties/{property}/{dashboardId}/{widgetId}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a single widget property by property key.
+      parameters:
+      - description: Property name
+        in: path
+        name: property
+        required: true
+        type: string
+      - description: Dashboard ID
+        in: path
+        name: dashboardId
+        required: true
+        type: string
+      - description: Widget ID
+        in: path
+        name: widgetId
+        required: true
+        type: string
+      - description: New property value
+        in: body
+        name: value
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/lib.Response'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Update one widget property
+      tags:
+      - widgets
+securityDefinitions:
+  Bearer:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

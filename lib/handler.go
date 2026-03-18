@@ -29,6 +29,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//go:generate go run github.com/swaggo/swag/cmd/swag@v1.16.3 init -o ../docs --parseDependency -d .. -g lib/handler.go
+
+// Start godoc
+// @title Dashboard API
+// @description Stores information about dashboards and their widgets.
+// @BasePath /
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
 func CreateServer() {
 	fmt.Println("Start Server")
 
@@ -47,6 +56,7 @@ func CreateServer() {
 	)
 
 	router.GET("/", getRootEndpoint)
+	router.GET("/doc", swaggerDocHandler)
 	router.GET("/dashboards", getDashboardsEndpoint)
 	router.POST("/dashboards", createDashboardEndpoint)
 	router.GET("/dashboards/:id", getDashboardEndpoint)
