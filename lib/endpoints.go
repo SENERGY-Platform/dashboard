@@ -332,7 +332,7 @@ func editWidgetPropertyEndpoint(c *gin.Context) {
 // @Router /widgets/name/{dashboardId}/{widgetId} [patch]
 func editWidgetNameEndpoint(c *gin.Context) {
 	var name string
-	err := c.ShouldBind(&name)
+	err := c.ShouldBindPlain(&name)
 	if err != nil {
 		_ = c.Error(errors.Join(GetError(http.StatusBadRequest), errors.New("Error while reading request body"), err))
 		return

@@ -21,9 +21,11 @@ package lib
 import (
 	"context"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/SENERGY-Platform/dashboard/lib/log"
+	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -48,13 +50,20 @@ func InitDB() {
 		log.Logger.Info("successfully connected to db")
 	}
 	DB = client
-	err = migrateDashboardIndices()
+	migrate, err := strconv.ParseBool(GetEnv("MIGRATE", "true"))
 	if err != nil {
-		panic("could not migrate dashboard indices: " + err.Error())
+		log.Logger.Warn("invalid value for MIGRATE environment variable, defaulting to true", attributes.ErrorKey, err)
+		migrate = true
 	}
-	err = migrateUpdatedAt()
-	if err != nil {
-		panic("could not migrate dashboard updatedAt: " + err.Error())
+	if migrate {
+		err = migrateDashboardIndices()
+		if err != nil {
+			panic("could not migrate dashboard indices: " + err.Error())
+		}
+		err = migrateUpdatedAt()
+		if err != nil {
+			panic("could not migrate dashboard updatedAt: " + err.Error())
+		}
 	}
 }
 

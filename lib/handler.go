@@ -24,6 +24,7 @@ import (
 	"github.com/SENERGY-Platform/dashboard/lib/log"
 	gin_mw "github.com/SENERGY-Platform/gin-middleware"
 	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
@@ -40,6 +41,10 @@ import (
 func CreateServer() {
 	log.Logger.Info("start server")
 
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AddAllowHeaders("Authorization", "if-modified-since")
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(
@@ -50,6 +55,7 @@ func CreateServer() {
 			nil,
 		),
 		requestid.New(requestid.WithCustomHeaderStrKey("X-Request-ID")),
+		cors.New(corsConfig),
 		gin_mw.ErrorHandler(GetStatusCode, ", "),
 		gin_mw.StructRecoveryHandler(log.Logger, gin_mw.DefaultRecoveryFunc),
 	)

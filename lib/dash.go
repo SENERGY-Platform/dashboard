@@ -142,6 +142,7 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 }
 
 func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, ctx context.Context) (Dashboard, error) {
+	previouslyUpdated := newDashboard.UpdatedAt // for race detection: if the dashboard was updated in the meantime, the update will fail because the previouslyUpdated timestamp does not match the current updatedAt timestamp in the database anymore
 	newDashboard.UpdatedAt = time.Now()
 	update := bson.M{
 		"$set": newDashboard,
@@ -152,11 +153,15 @@ func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, 
 		return Dashboard{}, normalizeModelError(err)
 	}
 
-	_, err = Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId}, update)
+	updateResult, err := Mongo().UpdateOne(ctx, bson.M{"_id": id, "userid": userId, "updatedAt": previouslyUpdated}, update)
 
 	if err != nil {
 		log.Logger.Error("update dashboard failed", attributes.ErrorKey, err)
 		return Dashboard{}, normalizeModelError(err)
+	}
+
+	if updateResult.MatchedCount == 0 {
+		return Dashboard{}, errors.New("dashboard was updated by another request, please retry")
 	}
 	return newDashboard, nil
 }
@@ -208,16 +213,21 @@ func createWidget(ctx context.Context, dashboardId string, widget Widget, userId
 }
 
 func updateWidget(ctx context.Context, dashboardId string, value interface{}, propertyToChange string, widgetID string, userId string) (err error) {
-	_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
-	if err != nil {
-		return err
+	for range 3 { // retry up to 3 times in case of concurrent updates
+		_, dash, err := getDashboard(nil, dashboardId, userId, ctx)
+		if err != nil {
+			return err
+		}
+		err = dash.updateWidget(value, propertyToChange, widgetID)
+		if err != nil {
+			log.Logger.Error("update widget failed", attributes.ErrorKey, err)
+			return err
+		}
+		dash, err = updateDashboard(dash, dashboardId, userId, ctx)
+		if err == nil {
+			return nil
+		}
 	}
-	err = dash.updateWidget(value, propertyToChange, widgetID)
-	if err != nil {
-		log.Logger.Error("update widget failed", attributes.ErrorKey, err)
-		return err
-	}
-	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
 
 	return err
 
@@ -240,7 +250,7 @@ func updateWidgetPositionInDashboard(positionUpdate WidgetPosition, userId strin
 	dash.Widgets[i].W = positionUpdate.W
 	dash.Widgets[i].H = positionUpdate.H
 
-	dash, err = updateDashboard(dash, dashboardId, userId, ctx)
+	_, err = updateDashboard(dash, dashboardId, userId, ctx)
 	if err != nil {
 		log.Logger.Error("update dashboard after widget position swap failed", attributes.ErrorKey, err)
 		return err
