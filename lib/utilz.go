@@ -57,6 +57,24 @@ func parseModifiedSince(c *gin.Context) *time.Time {
 }
 
 func addCacheControlHeaders(c *gin.Context, t time.Time) {
-	c.Header("Last-Modified", t.Format(http.TimeFormat))
+	c.Header("Last-Modified", cacheValidator(t, time.Now()).Format(http.TimeFormat))
 	c.Header("Cache-Control", "no-store")
+}
+
+// cacheValidator picks the Last-Modified value handed to the client. Last-Modified
+// carries whole seconds only, so a timestamp inside the second the response is
+// built in cannot tell "unchanged" apart from "changed again a few milliseconds
+// after this read": a client sending it back as If-Modified-Since would get a 304
+// and keep serving a stale copy. Capping the validator at the previous full
+// second costs a 304 for writes in the current second and keeps caching intact
+// for everything older.
+// The result is in UTC, because http.TimeFormat writes a literal GMT and would
+// otherwise label a local timestamp as GMT.
+func cacheValidator(lastModified time.Time, now time.Time) time.Time {
+	lastModified = lastModified.UTC().Truncate(time.Second)
+	newestCacheable := now.UTC().Truncate(time.Second).Add(-time.Second)
+	if lastModified.After(newestCacheable) {
+		return newestCacheable
+	}
+	return lastModified
 }
