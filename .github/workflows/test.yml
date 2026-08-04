@@ -1,0 +1,30 @@
+name: '[test] go test'
+
+on:
+  # master and dev are covered by the build workflows, which call this one as a
+  # gate before pushing an image - triggering here as well would run it twice
+  push:
+    branches-ignore:
+      - master
+      - dev
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Vet
+        run: go vet ./...
+      # the suite starts its own mongo through testcontainers, using the docker
+      # daemon preinstalled on the runner - no service container needed
+      - name: Test
+        run: go test ./... -count=1 -race
