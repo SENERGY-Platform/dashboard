@@ -2,10 +2,30 @@ basePath: /
 definitions:
   lib.Dashboard:
     properties:
+      columns:
+        description: |-
+          Columns is the number of grid columns the web ui uses, 0 letting it pick the
+          number itself. An update that omits the field keeps the stored value.
+        maximum: 12
+        minimum: 0
+        type: integer
       id:
         type: string
       index:
         type: integer
+      layout_mode:
+        allOf:
+        - $ref: '#/definitions/lib.LayoutMode'
+        description: |-
+          LayoutMode selects how the web ui lays out the widgets of this dashboard.
+          An update that omits the field keeps the stored value.
+        enum:
+        - compact
+        - list
+        - moveScale
+        - move
+        - scale
+        - none
       name:
         type: string
       refresh_time:
@@ -19,6 +39,22 @@ definitions:
           $ref: '#/definitions/lib.Widget'
         type: array
     type: object
+  lib.LayoutMode:
+    enum:
+    - compact
+    - list
+    - moveScale
+    - move
+    - scale
+    - none
+    type: string
+    x-enum-varnames:
+    - LayoutModeCompact
+    - LayoutModeList
+    - LayoutModeMoveScale
+    - LayoutModeMove
+    - LayoutModeScale
+    - LayoutModeNone
   lib.Response:
     properties:
       message:

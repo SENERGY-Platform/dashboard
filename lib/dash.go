@@ -48,6 +48,10 @@ func normalizeModelError(err error) error {
 }
 
 func createDashboard(ctx context.Context, dash Dashboard, userId string) (result Dashboard, err error) {
+	if err = dash.validate(); err != nil {
+		return result, normalizeModelError(err)
+	}
+	dash.applyDefaults()
 	dash.Id = primitive.NewObjectID()
 	dash.UserId = userId
 	dash.UpdatedAt = time.Now()
@@ -70,6 +74,7 @@ func getDashboard(ifNotModifiedSince *time.Time, id string, userId string, ctx c
 		log.Logger.Error("find dashboard failed", attributes.ErrorKey, err)
 		return false, dash, normalizeModelError(err)
 	}
+	dash.applyDefaults()
 	modified = true
 	if ifNotModifiedSince != nil {
 		modified = dash.UpdatedAt.Truncate(time.Second).After(*ifNotModifiedSince)
@@ -85,6 +90,9 @@ func getDashboards(ctx context.Context, ifNotModifiedSince *time.Time, userId st
 	}
 	if err = cur.All(ctx, &dashs); err != nil {
 		return false, nil, normalizeModelError(err)
+	}
+	for i := range dashs {
+		dashs[i].applyDefaults()
 	}
 
 	if len(dashs) == 0 {
@@ -142,6 +150,9 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 }
 
 func updateDashboard(newDashboard Dashboard, dashboardId string, userId string, ctx context.Context) (Dashboard, error) {
+	if err := newDashboard.validate(); err != nil {
+		return Dashboard{}, normalizeModelError(err)
+	}
 	previouslyUpdated := newDashboard.UpdatedAt // for race detection: if the dashboard was updated in the meantime, the update will fail because the previouslyUpdated timestamp does not match the current updatedAt timestamp in the database anymore
 	newDashboard.UpdatedAt = time.Now()
 	update := bson.M{
@@ -370,6 +381,27 @@ func migrateUpdatedAt() (err error) {
 	return err
 }
 
+// migrateFieldDefault backfills a field that was added to the dashboard model.
+// updatedAt is left alone on purpose: the default is the behaviour these
+// dashboards already had, so no client cache needs to be invalidated.
+func migrateFieldDefault(field string, value interface{}) (err error) {
+	log.Logger.Info("adding field to dashboards when needed", "field", field)
+	info, err := Mongo().UpdateMany(context.TODO(), bson.M{field: bson.M{"$exists": false}}, bson.M{"$set": bson.M{field: value}})
+	if err != nil {
+		return err
+	}
+	log.Logger.Info("added field to dashboards", "field", field, "modified_count", info.ModifiedCount)
+	return nil
+}
+
+func migrateLayoutMode() (err error) {
+	return migrateFieldDefault("layout_mode", defaultLayoutMode())
+}
+
+func migrateColumns() (err error) {
+	return migrateFieldDefault("columns", defaultColumns())
+}
+
 func createDefaultDashboard(ctx context.Context, userId string) (result Dashboard, err error) {
 	result.Id = primitive.NewObjectID()
 	uZero := uint16(0)
@@ -378,6 +410,7 @@ func createDefaultDashboard(ctx context.Context, userId string) (result Dashboar
 	result.UserId = userId
 	result.Name = "System"
 	result.RefreshTime = 0
+	result.applyDefaults()
 	result.Widgets = []Widget{
 		{
 			Id:         primitive.NewObjectID(),

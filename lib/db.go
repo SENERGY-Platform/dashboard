@@ -68,6 +68,14 @@ func InitDB() {
 		if err != nil {
 			panic("could not migrate dashboard updatedAt: " + err.Error())
 		}
+		err = migrateLayoutMode()
+		if err != nil {
+			panic("could not migrate dashboard layout_mode: " + err.Error())
+		}
+		err = migrateColumns()
+		if err != nil {
+			panic("could not migrate dashboard columns: " + err.Error())
+		}
 	}
 }
 

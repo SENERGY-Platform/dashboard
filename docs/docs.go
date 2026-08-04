@@ -701,11 +701,33 @@ const docTemplate = `{
         "lib.Dashboard": {
             "type": "object",
             "properties": {
+                "columns": {
+                    "description": "Columns is the number of grid columns the web ui uses, 0 letting it pick the\nnumber itself. An update that omits the field keeps the stored value.",
+                    "type": "integer",
+                    "maximum": 12,
+                    "minimum": 0
+                },
                 "id": {
                     "type": "string"
                 },
                 "index": {
                     "type": "integer"
+                },
+                "layout_mode": {
+                    "description": "LayoutMode selects how the web ui lays out the widgets of this dashboard.\nAn update that omits the field keeps the stored value.",
+                    "enum": [
+                        "compact",
+                        "list",
+                        "moveScale",
+                        "move",
+                        "scale",
+                        "none"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/lib.LayoutMode"
+                        }
+                    ]
                 },
                 "name": {
                     "type": "string"
@@ -726,6 +748,25 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "lib.LayoutMode": {
+            "type": "string",
+            "enum": [
+                "compact",
+                "list",
+                "moveScale",
+                "move",
+                "scale",
+                "none"
+            ],
+            "x-enum-varnames": [
+                "LayoutModeCompact",
+                "LayoutModeList",
+                "LayoutModeMoveScale",
+                "LayoutModeMove",
+                "LayoutModeScale",
+                "LayoutModeNone"
+            ]
         },
         "lib.Response": {
             "type": "object",

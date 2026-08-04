@@ -24,6 +24,7 @@ import (
 
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/SENERGY-Platform/dashboard/lib/log"
@@ -34,6 +35,54 @@ type Response struct {
 	Message string `json:"message,omitempty"`
 }
 
+// LayoutMode describes how a dashboard lays out its widgets. The service only
+// stores and returns the value, the web ui is the only component acting on it.
+type LayoutMode string
+
+const (
+	LayoutModeCompact   LayoutMode = "compact"
+	LayoutModeList      LayoutMode = "list"
+	LayoutModeMoveScale LayoutMode = "moveScale"
+	LayoutModeMove      LayoutMode = "move"
+	LayoutModeScale     LayoutMode = "scale"
+	LayoutModeNone      LayoutMode = "none"
+)
+
+// layoutModes lists every accepted value once, so validation and the error
+// message telling a client what it may send cannot drift apart.
+var layoutModes = []LayoutMode{LayoutModeCompact, LayoutModeList, LayoutModeMoveScale, LayoutModeMove, LayoutModeScale, LayoutModeNone}
+
+// defaultLayoutMode is what a dashboard without a stored layout_mode reports and
+// what the migration writes into documents predating the field.
+func defaultLayoutMode() LayoutMode {
+	return LayoutModeCompact
+}
+
+func (this LayoutMode) valid() bool {
+	return slices.Contains(layoutModes, this)
+}
+
+func layoutModeNames() string {
+	names := make([]string, 0, len(layoutModes))
+	for _, mode := range layoutModes {
+		names = append(names, string(mode))
+	}
+	return strings.Join(names, ", ")
+}
+
+const (
+	// ColumnsAuto lets the web ui pick the number of grid columns itself.
+	ColumnsAuto = 0
+	// MaxColumns is the widest grid a dashboard may ask for.
+	MaxColumns = 12
+)
+
+// defaultColumns is what a dashboard without a stored columns value reports and
+// what the migration writes into documents predating the field.
+func defaultColumns() int {
+	return ColumnsAuto
+}
+
 type Dashboard struct {
 	Id          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Name        string             `json:"name,omitempty"`
@@ -41,7 +90,57 @@ type Dashboard struct {
 	RefreshTime uint16             `json:"refresh_time"`
 	Widgets     []Widget           `json:"widgets"`
 	Index       *uint16            `json:"index,omitempty"`
-	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt,omitempty"`
+	// LayoutMode selects how the web ui lays out the widgets of this dashboard.
+	// An update that omits the field keeps the stored value.
+	LayoutMode *LayoutMode `bson:"layout_mode,omitempty" json:"layout_mode" enums:"compact,list,moveScale,move,scale,none"`
+	// Columns is the number of grid columns the web ui uses, 0 letting it pick the
+	// number itself. An update that omits the field keeps the stored value.
+	Columns   *int      `bson:"columns,omitempty" json:"columns" minimum:"0" maximum:"12"`
+	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt,omitempty"`
+}
+
+// applyDefaults fills fields that dashboards written before those fields existed
+// do not carry, so a client never sees a missing or null value. Those fields are
+// pointers so that a nil can mean "not sent by the client" while a request is
+// being decoded, which is what keepUnset relies on.
+func (this *Dashboard) applyDefaults() {
+	if this.LayoutMode == nil {
+		mode := defaultLayoutMode()
+		this.LayoutMode = &mode
+	}
+	if this.Columns == nil {
+		columns := defaultColumns()
+		this.Columns = &columns
+	}
+}
+
+// keepUnset takes the fields the client did not send from the stored dashboard.
+// Clients send the whole dashboard object on update and older ones do not know
+// these fields at all, so an absent field has to leave the stored value alone
+// instead of resetting the user's setting to the default.
+// The values are copied rather than the pointers, so the result does not alias
+// the dashboard read from the database.
+func (this *Dashboard) keepUnset(stored Dashboard) {
+	if this.LayoutMode == nil && stored.LayoutMode != nil {
+		mode := *stored.LayoutMode
+		this.LayoutMode = &mode
+	}
+	if this.Columns == nil && stored.Columns != nil {
+		columns := *stored.Columns
+		this.Columns = &columns
+	}
+}
+
+// validate rejects unknown values instead of storing them verbatim or silently
+// coercing them to the default, so a typo stays visible.
+func (this *Dashboard) validate() error {
+	if this.LayoutMode != nil && !this.LayoutMode.valid() {
+		return errors.Join(ErrBadRequest, fmt.Errorf("invalid layout_mode %q, expected one of %s", string(*this.LayoutMode), layoutModeNames()))
+	}
+	if this.Columns != nil && (*this.Columns < ColumnsAuto || *this.Columns > MaxColumns) {
+		return errors.Join(ErrBadRequest, fmt.Errorf("invalid columns %d, expected %d for automatic or 1 to %d", *this.Columns, ColumnsAuto, MaxColumns))
+	}
+	return nil
 }
 
 type Widget struct {

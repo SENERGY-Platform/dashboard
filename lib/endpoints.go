@@ -192,6 +192,7 @@ func editDashboardEndpoint(c *gin.Context) {
 		return
 	}
 	dashReq.Widgets = oldDashboard.Widgets
+	dashReq.keepUnset(oldDashboard)
 
 	dash, err := updateDashboard(dashReq, dashboardId, userId, ctx)
 	if err != nil {
