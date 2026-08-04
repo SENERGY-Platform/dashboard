@@ -31,7 +31,7 @@ func getUserId(c *gin.Context) (userId string) {
 	if userId == "" {
 		userId = "testUser"
 	}
-	strings.Replace(userId, "\"", "", -1)
+	userId = strings.ReplaceAll(userId, "\"", "")
 	return
 }
 

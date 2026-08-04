@@ -17,8 +17,12 @@
 package lib
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestCacheValidator(t *testing.T) {
@@ -69,4 +73,15 @@ func TestCacheValidator(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestGetUserIdStripsQuotes(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-UserId", `"someUser"`)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = req
+
+	if got := getUserId(c); got != "someUser" {
+		t.Errorf("expected the quotes to be stripped, got %q", got)
+	}
 }
