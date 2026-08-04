@@ -27,6 +27,7 @@ import (
 	"github.com/SENERGY-Platform/dashboard/lib/log"
 	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -34,13 +35,16 @@ import (
 
 var DB *mongo.Client
 
+func mongoRegistry() *bsoncodec.Registry {
+	tM := reflect.TypeOf(bson.M{})
+	return bson.NewRegistryBuilder().RegisterTypeMapEntry(bsontype.EmbeddedDocument, tM).Build()
+}
+
 func InitDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tM := reflect.TypeOf(bson.M{})
-	reg := bson.NewRegistryBuilder().RegisterTypeMapEntry(bsontype.EmbeddedDocument, tM).Build()
-	clientOpts := options.Client().ApplyURI(GetEnv("MONGO_REPL_URL", "mongodb://localhost:27017")).SetRegistry(reg)
+	clientOpts := options.Client().ApplyURI(GetEnv("MONGO_REPL_URL", "mongodb://localhost:27017")).SetRegistry(mongoRegistry())
 
 	client, err := mongo.Connect(ctx, clientOpts)
 
@@ -67,8 +71,13 @@ func InitDB() {
 	}
 }
 
+// mongoDatabase is the database every collection lives in. Production never
+// changes it; tests point it at a throwaway database so a run can never touch
+// real data, not even when it is aimed at a developer's local mongo.
+var mongoDatabase = "dashboard"
+
 func Mongo() *mongo.Collection {
-	return DB.Database("dashboard").Collection("dashboards")
+	return DB.Database(mongoDatabase).Collection("dashboards")
 
 }
 

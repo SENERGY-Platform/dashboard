@@ -40,7 +40,16 @@ import (
 // @name Authorization
 func CreateServer() {
 	log.Logger.Info("start server")
+	router := NewRouter()
+	log.Logger.Info("listen on port", "port", "8080")
+	err := http.ListenAndServe(":8080", router)
+	if err != nil {
+		log.Logger.Error("listen and serve failed", attributes.ErrorKey, err)
+		panic(err)
+	}
+}
 
+func NewRouter() *gin.Engine {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true
 	corsConfig.AddAllowHeaders("Authorization", "if-modified-since")
@@ -76,10 +85,5 @@ func CreateServer() {
 	router.PATCH("/widgets/name/:dashboardId/:widgetId", editWidgetNameEndpoint)
 	router.PATCH("/widgets/properties/*path", editWidgetPropertiesDispatchEndpoint)
 
-	log.Logger.Info("listen on port", "port", "8080")
-	err := http.ListenAndServe(":8080", router)
-	if err != nil {
-		log.Logger.Error("listen and serve failed", attributes.ErrorKey, err)
-		panic(err)
-	}
+	return router
 }
