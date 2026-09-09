@@ -711,7 +711,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "index": {
-                    "type": "integer"
+                    "description": "Index is the tab position of the dashboard. An int rather than an\nunsigned type, so a document that was pushed below zero stays readable\nand can be repaired instead of failing every read of the user.",
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "layout_mode": {
                     "description": "LayoutMode selects how the web ui lays out the widgets of this dashboard.\nAn update that omits the field keeps the stored value.",

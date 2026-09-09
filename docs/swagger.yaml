@@ -12,6 +12,11 @@ definitions:
       id:
         type: string
       index:
+        description: |-
+          Index is the tab position of the dashboard. An int rather than an
+          unsigned type, so a document that was pushed below zero stays readable
+          and can be repaired instead of failing every read of the user.
+        minimum: 0
         type: integer
       layout_mode:
         allOf:

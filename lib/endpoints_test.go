@@ -742,3 +742,66 @@ func TestWidgetUpdatesKeepDashboardSettings(t *testing.T) {
 		}
 	}
 }
+
+// Two dashboards may share an index - imports and the default dashboard wrote
+// fixed values - and a delete must shift only the ones behind the deleted one:
+// with `$gte` the twin sank below zero, where a uint16 decode made every read
+// of the account fail.
+func TestDeleteDashboardShiftsOnlyTheDashboardsBehindIt(t *testing.T) {
+	env := newTestEnv(t)
+	first := env.createDashboard(map[string]interface{}{"name": "first", "index": 0, "widgets": []interface{}{}})
+	twin := env.createDashboard(map[string]interface{}{"name": "twin", "index": 0, "widgets": []interface{}{}})
+	behind := env.createDashboard(map[string]interface{}{"name": "behind", "index": 1, "widgets": []interface{}{}})
+
+	rec := env.request(http.MethodDelete, "/dashboards/"+env.idOf(first), nil, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete: expected %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if got := asNumber(env.fieldOf(env.idOf(twin), "index")); got != float64(0) {
+		t.Errorf("the twin at the same index has to stay at 0, got %v", got)
+	}
+	if got := asNumber(env.fieldOf(env.idOf(behind), "index")); got != float64(0) {
+		t.Errorf("the dashboard behind has to move up to 0, got %v", got)
+	}
+	rec, list := env.listDashboards("")
+	if rec.Code != http.StatusOK || len(list) != 2 {
+		t.Fatalf("list after delete: expected 200 with 2 dashboards, got %d with %d: %s", rec.Code, len(list), rec.Body.String())
+	}
+}
+
+// A document that already carries a negative index has to stay readable, and
+// the start-up migration puts it back into the sequence of its user.
+func TestANegativeIndexIsReadableAndRepaired(t *testing.T) {
+	env := newTestEnv(t)
+	id := primitive.NewObjectID()
+	_, err := Mongo().InsertOne(context.Background(), bson.M{
+		"_id":         id,
+		"userid":      env.userId,
+		"name":        "sunk",
+		"refreshtime": 0,
+		"index":       -1,
+		"widgets":     []interface{}{},
+		"updatedAt":   time.Now().Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, list := env.listDashboards("")
+	if rec.Code != http.StatusOK || len(list) != 1 {
+		t.Fatalf("list: expected 200 with 1 dashboard, got %d with %d: %s", rec.Code, len(list), rec.Body.String())
+	}
+	if err = migrateDashboardIndices(); err != nil {
+		t.Fatal(err)
+	}
+	if got := asNumber(env.fieldOf(id.Hex(), "index")); got != float64(0) {
+		t.Errorf("migrated index: expected 0, got %v", got)
+	}
+}
+
+func TestCreateDashboardRejectsANegativeIndex(t *testing.T) {
+	env := newTestEnv(t)
+	rec := env.request(http.MethodPost, "/dashboards", map[string]interface{}{"name": "x", "index": -1, "widgets": []interface{}{}}, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}

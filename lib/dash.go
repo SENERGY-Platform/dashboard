@@ -135,9 +135,10 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 	}
 
 	if old.Index != nil {
-		// update indices
+		// only the dashboards behind the deleted one move up: a twin at the same
+		// index would otherwise sink below zero
 		info, err := Mongo().UpdateMany(ctx,
-			bson.M{"userid": userId, "index": bson.M{"$gte": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
+			bson.M{"userid": userId, "index": bson.M{"$gt": *old.Index}}, bson.M{"$inc": bson.M{"index": -1}})
 		if err != nil {
 			log.Logger.Error("update dashboard indices after delete failed", attributes.ErrorKey, err)
 			return Response{}, normalizeModelError(err)
@@ -358,14 +359,17 @@ func migrateDashboardIndices() (err error) {
 		return err
 	}
 	lastUserId := ""
-	userIndex := uint16(0)
+	userIndex := 0
 	for _, dash := range dashs {
 		if dash.UserId != lastUserId {
 			userIndex = 0
 		}
 		lastUserId = dash.UserId
-		if dash.Index == nil {
-			dash.Index = &userIndex
+		// a negative index is what an earlier delete left behind and is repaired
+		// like a missing one
+		if dash.Index == nil || *dash.Index < 0 {
+			index := userIndex
+			dash.Index = &index
 			log.Logger.Info("adding dashboard index", "index", userIndex, "dashboard_id", dash.Id.Hex(), "user_id", dash.UserId)
 			updateDashboard(dash, dash.Id.Hex(), dash.UserId, context.TODO())
 		}
@@ -404,7 +408,7 @@ func migrateColumns() (err error) {
 
 func createDefaultDashboard(ctx context.Context, userId string) (result Dashboard, err error) {
 	result.Id = primitive.NewObjectID()
-	uZero := uint16(0)
+	uZero := 0
 	result.UpdatedAt = time.Now()
 	result.Index = &uZero
 	result.UserId = userId

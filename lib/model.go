@@ -89,7 +89,10 @@ type Dashboard struct {
 	UserId      string             `json:"user_id,omitempty"`
 	RefreshTime uint16             `json:"refresh_time"`
 	Widgets     []Widget           `json:"widgets"`
-	Index       *uint16            `json:"index,omitempty"`
+	// Index is the tab position of the dashboard. An int rather than an
+	// unsigned type, so a document that was pushed below zero stays readable
+	// and can be repaired instead of failing every read of the user.
+	Index *int `json:"index,omitempty" minimum:"0"`
 	// LayoutMode selects how the web ui lays out the widgets of this dashboard.
 	// An update that omits the field keeps the stored value.
 	LayoutMode *LayoutMode `bson:"layout_mode,omitempty" json:"layout_mode" enums:"compact,list,moveScale,move,scale,none"`
@@ -134,6 +137,9 @@ func (this *Dashboard) keepUnset(stored Dashboard) {
 // validate rejects unknown values instead of storing them verbatim or silently
 // coercing them to the default, so a typo stays visible.
 func (this *Dashboard) validate() error {
+	if this.Index != nil && *this.Index < 0 {
+		return errors.Join(ErrBadRequest, fmt.Errorf("invalid index %d, expected 0 or more", *this.Index))
+	}
 	if this.LayoutMode != nil && !this.LayoutMode.valid() {
 		return errors.Join(ErrBadRequest, fmt.Errorf("invalid layout_mode %q, expected one of %s", string(*this.LayoutMode), layoutModeNames()))
 	}
