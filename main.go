@@ -34,11 +34,18 @@ func main() {
 		log.Logger.Warn("Error loading .env file", attributes.ErrorKey, err)
 	}
 
+	mongoConfig := lib.MongoConfigFromEnv()
 	if os.Getenv("SYNC") == "true" {
-		lib.Sync()
+		if err = lib.Sync(mongoConfig); err != nil {
+			log.Logger.Error("database sync failed", attributes.ErrorKey, err)
+			os.Exit(1)
+		}
 	}
 
-	lib.InitDB()
+	if err = lib.InitDB(mongoConfig); err != nil {
+		log.Logger.Error("database init failed", attributes.ErrorKey, err)
+		os.Exit(1)
+	}
 	defer lib.CloseDB()
 	lib.CreateServer()
 }

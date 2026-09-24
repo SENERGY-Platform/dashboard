@@ -2,12 +2,12 @@ package lib
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"time"
 
 	"github.com/SENERGY-Platform/dashboard/lib/log"
-	"github.com/SENERGY-Platform/go-service-base/struct-logger/attributes"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,7 +17,8 @@ import (
 var StandaloneDB *mongo.Client
 var ReplicaDB *mongo.Client
 
-func InitSyncDBs() {
+// InitSyncDBs connects to the legacy standalone mongo in MONGO and, like InitDB, to the configured one.
+func InitSyncDBs(cfg MongoConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -26,76 +27,82 @@ func InitSyncDBs() {
 	clientOpts := options.Client().ApplyURI("mongodb://" + os.Getenv("MONGO")).SetRegistry(reg)
 
 	client, err := mongo.Connect(ctx, clientOpts)
-
 	if err != nil {
-		panic("database connect failed: " + err.Error())
-	} else {
-		log.Logger.Info("successfully connected to standalone db")
+		return fmt.Errorf("standalone database connect failed: %w", err)
 	}
-	StandaloneDB = client
-	log.Logger.Info("try to connect to replica db", "uri", os.Getenv("MONGO_REPL_URL"))
-	clientOpts = options.Client().ApplyURI(os.Getenv("MONGO_REPL_URL")).SetRegistry(reg)
-
-	client, err = mongo.Connect(ctx, clientOpts)
-
+	log.Logger.Info("successfully connected to standalone db")
+	log.Logger.Info("try to connect to replica db", "database", cfg.Database)
+	replica, err := openDB(cfg, startupTimeout)
 	if err != nil {
-		panic("database connect failed: " + err.Error())
-	} else {
-		log.Logger.Info("successfully connected to replica db")
+		disconnect(client)
+		return err
 	}
-	ReplicaDB = client
+	log.Logger.Info("successfully connected to replica db")
+	StandaloneDB, ReplicaDB = client, replica
+	return nil
 }
 
-func GetOldDashs() []interface{} {
+func GetOldDashs() ([]interface{}, error) {
 	standaloneCollection := StandaloneDB.Database("dashboard").Collection("dashboards")
 	ctx := context.TODO()
 
 	opts := options.Find()
 	cur, err := standaloneCollection.Find(ctx, bson.M{}, opts)
 	if err != nil {
-		log.Logger.Error("find dashboards in standalone db failed", attributes.ErrorKey, err)
+		return nil, fmt.Errorf("find dashboards in standalone db failed: %w", err)
 	}
 	var dashs []interface{}
 	if err = cur.All(context.TODO(), &dashs); err != nil {
-		log.Logger.Error("decode dashboards from standalone db failed", attributes.ErrorKey, err)
+		return nil, fmt.Errorf("decode dashboards from standalone db failed: %w", err)
 	}
 	log.Logger.Info("old data sync scan complete", "dashboard_count", len(dashs))
-	return dashs
+	return dashs, nil
 }
 
-func Insert(dashs []interface{}) {
-	replicaCollection := ReplicaDB.Database("dashboard").Collection("dashboards")
+func Insert(dashs []interface{}, database string) error {
+	replicaCollection := ReplicaDB.Database(database).Collection("dashboards")
 	if len(dashs) == 0 {
 		log.Logger.Info("no data to sync")
-		return
+		return nil
 	}
 
 	log.Logger.Info("insert dashboards into replicaset", "count", len(dashs))
-	_, err := replicaCollection.InsertMany(context.TODO(), dashs)
-	if err != nil {
-		panic(err)
+	if _, err := replicaCollection.InsertMany(context.TODO(), dashs); err != nil {
+		return fmt.Errorf("insert dashboards into replica db failed: %w", err)
 	}
+	return nil
 }
 
-func Sync() {
-	InitSyncDBs()
-	dashs := GetOldDashs()
-	Insert(dashs)
-	CheckReplica()
+// Sync copies the dashboards from the legacy standalone mongo into the configured one.
+func Sync(cfg MongoConfig) error {
+	if err := InitSyncDBs(cfg); err != nil {
+		return err
+	}
+	defer disconnect(StandaloneDB)
+	defer disconnect(ReplicaDB)
+	dashs, err := GetOldDashs()
+	if err != nil {
+		return err
+	}
+	if err = Insert(dashs, cfg.Database); err != nil {
+		return err
+	}
+	return CheckReplica(cfg.Database)
 }
 
-func CheckReplica() {
-	collection := ReplicaDB.Database("dashboard").Collection("dashboards")
+func CheckReplica(database string) error {
+	collection := ReplicaDB.Database(database).Collection("dashboards")
 	ctx := context.TODO()
 
 	opts := options.Find()
 	cur, err := collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
-		log.Logger.Error("find dashboards in replica db failed", attributes.ErrorKey, err)
+		return fmt.Errorf("find dashboards in replica db failed: %w", err)
 	}
 	var dashs []interface{}
 	if err = cur.All(context.TODO(), &dashs); err != nil {
-		log.Logger.Error("decode dashboards in replica db failed", attributes.ErrorKey, err)
+		return fmt.Errorf("decode dashboards in replica db failed: %w", err)
 	}
 	log.Logger.Info("replica sync result", "dashboard_count", len(dashs))
+	return nil
 }
