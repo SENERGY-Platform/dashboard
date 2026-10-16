@@ -3,7 +3,7 @@ module github.com/SENERGY-Platform/dashboard
 go 1.26.1
 
 require (
-	github.com/SENERGY-Platform/gin-middleware v0.14.1
+	github.com/SENERGY-Platform/gin-middleware v0.14.2
 	github.com/gin-contrib/requestid v1.0.5
 	github.com/gin-gonic/gin v1.12.0
 	github.com/joho/godotenv v1.3.0
