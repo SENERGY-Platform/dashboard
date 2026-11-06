@@ -163,6 +163,13 @@ func Mongo() *mongo.Collection {
 
 }
 
+// MongoDeletions holds one document per user, keyed by user id, with the time of
+// their last dashboard delete. A delete leaves no dashboard behind that could carry
+// that time, which the validator of the dashboard list needs.
+func MongoDeletions() *mongo.Collection {
+	return DB.Database(mongoDatabase).Collection("deletions")
+}
+
 func CloseDB() {
 	ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cf()

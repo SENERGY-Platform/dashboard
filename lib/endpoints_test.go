@@ -243,6 +243,22 @@ func (this *testEnv) setUpdatedAt(id string, at time.Time) {
 	}
 }
 
+// setDeletedAt puts a known time on the mark of the user's last delete, for the same
+// reason as setUpdatedAt.
+func (this *testEnv) setDeletedAt(at time.Time) {
+	this.t.Helper()
+	_, err := MongoDeletions().UpdateOne(context.Background(), bson.M{"_id": this.userId},
+		bson.M{"$set": bson.M{"deletedAt": at}}, options.Update().SetUpsert(true))
+	if err != nil {
+		this.t.Fatal(err)
+	}
+}
+
+func (this *testEnv) deleteDashboard(id string) *httptest.ResponseRecorder {
+	this.t.Helper()
+	return this.request(http.MethodDelete, "/dashboards/"+id, nil, nil)
+}
+
 func (this *testEnv) lastModified(rec *httptest.ResponseRecorder) time.Time {
 	this.t.Helper()
 	header := rec.Header().Get("Last-Modified")
@@ -803,5 +819,63 @@ func TestCreateDashboardRejectsANegativeIndex(t *testing.T) {
 	rec := env.request(http.MethodPost, "/dashboards", map[string]interface{}{"name": "x", "index": -1, "widgets": []interface{}{}}, nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
+// acceptance check 7: a client caching the list on Last-Modified must not keep a copy
+// that still holds a deleted dashboard. The delete leaves no document whose updatedAt
+// could carry its time, so the mark of the last delete carries it.
+func TestDeleteInvalidatesCachedDashboardList(t *testing.T) {
+	env := newTestEnv(t)
+	keep := env.idOf(env.createDashboard(map[string]interface{}{"name": "keep"}))
+	gone := env.idOf(env.createDashboard(map[string]interface{}{"name": "gone"}))
+	env.setUpdatedAt(keep, anHourAgo())
+	env.setUpdatedAt(gone, anHourAgo())
+
+	rec, list := env.listDashboards("")
+	if rec.Code != http.StatusOK || len(list) != 2 {
+		t.Fatalf("list: expected %d with 2 dashboards, got %d with %d", http.StatusOK, rec.Code, len(list))
+	}
+	cached := rec.Header().Get("Last-Modified")
+	if cached == "" {
+		t.Fatal("expected a Last-Modified header")
+	}
+
+	if delRec := env.deleteDashboard(gone); delRec.Code != http.StatusOK {
+		t.Fatalf("delete: expected %d, got %d: %s", http.StatusOK, delRec.Code, delRec.Body.String())
+	}
+
+	rec, list = env.listDashboards(cached)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d after the delete, got %d: the client would keep serving its stale cache", http.StatusOK, rec.Code)
+	}
+	if len(list) != 1 || list[0]["name"] != "keep" {
+		t.Errorf("expected only the kept dashboard, got %v", list)
+	}
+}
+
+// The mark travels into the validator as well, so a client that caches the answer after
+// a delete gets its 304 back, instead of the whole list on every read from then on.
+func TestListStaysCacheableAfterADelete(t *testing.T) {
+	env := newTestEnv(t)
+	twoHoursAgo := anHourAgo().Add(-time.Hour)
+	keep := env.idOf(env.createDashboard(map[string]interface{}{"name": "keep"}))
+	gone := env.idOf(env.createDashboard(map[string]interface{}{"name": "gone"}))
+	env.setUpdatedAt(keep, twoHoursAgo)
+	env.setUpdatedAt(gone, twoHoursAgo)
+	if delRec := env.deleteDashboard(gone); delRec.Code != http.StatusOK {
+		t.Fatalf("delete: expected %d, got %d: %s", http.StatusOK, delRec.Code, delRec.Body.String())
+	}
+	env.setDeletedAt(anHourAgo())
+
+	rec, _ := env.listDashboards("")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rec.Code)
+	}
+	validator := rec.Header().Get("Last-Modified")
+
+	rec, _ = env.listDashboards(validator)
+	if rec.Code != http.StatusNotModified {
+		t.Fatalf("expected %d, got %d: the whole list would travel on every read", http.StatusNotModified, rec.Code)
 	}
 }

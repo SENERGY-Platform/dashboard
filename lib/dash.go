@@ -82,14 +82,48 @@ func getDashboard(ifNotModifiedSince *time.Time, id string, userId string, ctx c
 	return
 }
 
-func getDashboards(ctx context.Context, ifNotModifiedSince *time.Time, userId string) (modified bool, dashs []Dashboard, err error) {
+// dashboardDeletion is the mark of the last dashboard a user deleted, keyed by user id.
+type dashboardDeletion struct {
+	UserId    string    `bson:"_id"`
+	DeletedAt time.Time `bson:"deletedAt"`
+}
+
+func recordDashboardDeletion(ctx context.Context, userId string, at time.Time) error {
+	_, err := MongoDeletions().UpdateOne(ctx,
+		bson.M{"_id": userId},
+		bson.M{"$set": bson.M{"deletedAt": at}},
+		options.Update().SetUpsert(true))
+	return err
+}
+
+// lastDashboardDeletion answers the zero time for a user who never deleted a dashboard.
+func lastDashboardDeletion(ctx context.Context, userId string) (time.Time, error) {
+	var deletion dashboardDeletion
+	err := MongoDeletions().FindOne(ctx, bson.M{"_id": userId}).Decode(&deletion)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return deletion.DeletedAt, nil
+}
+
+// getDashboards answers lastDeleted alongside the list, because the caller needs it for
+// the cache validator: without it a delete would hand out a validator that falls back
+// behind the one a client already holds.
+func getDashboards(ctx context.Context, ifNotModifiedSince *time.Time, userId string) (modified bool, dashs []Dashboard, lastDeleted time.Time, err error) {
 	opts := options.Find().SetSort(bson.D{{Key: "index", Value: 1}})
 	cur, err := Mongo().Find(ctx, bson.M{"userid": userId}, opts)
 	if err != nil {
-		return false, nil, normalizeModelError(err)
+		return false, nil, time.Time{}, normalizeModelError(err)
 	}
 	if err = cur.All(ctx, &dashs); err != nil {
-		return false, nil, normalizeModelError(err)
+		return false, nil, time.Time{}, normalizeModelError(err)
+	}
+	lastDeleted, err = lastDashboardDeletion(ctx, userId)
+	if err != nil {
+		return false, nil, time.Time{}, normalizeModelError(err)
 	}
 	for i := range dashs {
 		dashs[i].applyDefaults()
@@ -112,6 +146,9 @@ func getDashboards(ctx context.Context, ifNotModifiedSince *time.Time, userId st
 				break
 			}
 		}
+		if !modified {
+			modified = lastDeleted.Truncate(time.Second).After(*ifNotModifiedSince)
+		}
 	}
 	return
 }
@@ -131,6 +168,11 @@ func deleteDashboard(ctx context.Context, id string, userId string) (Response, e
 	_, err = Mongo().DeleteOne(ctx, bson.M{"_id": objectId, "userid": userId})
 	if err != nil {
 		log.Logger.Error("delete dashboard failed", attributes.ErrorKey, err)
+		return Response{}, normalizeModelError(err)
+	}
+
+	if err = recordDashboardDeletion(ctx, userId, time.Now()); err != nil {
+		log.Logger.Error("record dashboard deletion failed", attributes.ErrorKey, err)
 		return Response{}, normalizeModelError(err)
 	}
 

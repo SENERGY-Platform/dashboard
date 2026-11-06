@@ -124,7 +124,7 @@ func getDashboardEndpoint(c *gin.Context) {
 // @Router /dashboards [get]
 func getDashboardsEndpoint(c *gin.Context) {
 	t := parseModifiedSince(c)
-	modified, dashboards, err := getDashboards(c.Request.Context(), t, getUserId(c))
+	modified, dashboards, lastDeleted, err := getDashboards(c.Request.Context(), t, getUserId(c))
 	if err != nil {
 		_ = c.Error(errors.Join(GetError(GetStatusCode(err)), errors.New("Error while reading dashboards"), err))
 		return
@@ -138,6 +138,11 @@ func getDashboardsEndpoint(c *gin.Context) {
 		if dash.UpdatedAt.After(latest) {
 			latest = dash.UpdatedAt
 		}
+	}
+	// a delete only shows in the mark, and without it the validator would fall back
+	// behind the one the client already holds
+	if lastDeleted.After(latest) {
+		latest = lastDeleted
 	}
 	latest = latest.Truncate(time.Second)
 	addCacheControlHeaders(c, latest)
